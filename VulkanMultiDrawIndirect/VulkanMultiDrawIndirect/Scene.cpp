@@ -13,12 +13,12 @@ Scene::~Scene()
 
 const void Scene::Init()
 {
-	return void();
+	_renderer.CreateMesh();
 }
 
 const void Scene::Start()
 {
-	return void();
+	_renderer.Render();
 }
 
 const void Scene::Shutdown()
