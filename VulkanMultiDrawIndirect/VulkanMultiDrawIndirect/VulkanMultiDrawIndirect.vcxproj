@@ -158,8 +158,10 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="VulkanHelpers.cpp" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="Scene.h" />
+    <ClInclude Include="VulkanHelpers.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Renderer.cpp" />

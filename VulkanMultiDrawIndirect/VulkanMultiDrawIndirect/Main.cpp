@@ -2,7 +2,6 @@
 #include <SDL.h>
 #include "Scene.h"
 #include <stdexcept>
-#include <vulkan\vulkan.h>
 
 int main(int argc, char** argv)
 {
