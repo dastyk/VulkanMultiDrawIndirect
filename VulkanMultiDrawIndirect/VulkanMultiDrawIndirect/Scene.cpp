@@ -2,7 +2,7 @@
 
 
 
-Scene::Scene()
+Scene::Scene(Renderer& renderer) : _renderer(renderer)
 {
 }
 

@@ -1,8 +1,11 @@
 #pragma once
+
+#include "Renderer.h"
+
 class Scene
 {
 public:
-	Scene();
+	Scene(Renderer& renderer);
 	~Scene();
 
 
@@ -10,6 +13,7 @@ public:
 	const void Start();
 	const void Shutdown();
 
-
+private:
+	Renderer& _renderer;
 };
 

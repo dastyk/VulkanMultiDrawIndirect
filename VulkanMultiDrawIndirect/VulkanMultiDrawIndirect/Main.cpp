@@ -2,15 +2,50 @@
 #include <SDL.h>
 #include "Scene.h"
 #include <stdexcept>
-
+#include <ConsoleThread.h>
 #include <SDL_syswm.h>
 #define SCRWIDTH (800)
 #define SCRHEIGHT (640)
 
+#pragma comment(lib, "DebugConsole.lib")
 
 int main(int argc, char** argv)
 {
 
+	DebugUtils::DebugConsole::Command_Structure def =
+	{
+		nullptr,
+		[](void* userData, int argc, char** argv) {printf("Command not found: %s\n\n", argv[0]);},
+		[](void* userData, int argc, char** argv) {},
+		"",
+		""
+	};
+
+	DebugUtils::ConsoleThread::Init(&def);
+
+	DebugUtils::DebugConsole::Command_Structure exitCommand =
+	{
+		nullptr,
+		[](void* userData, int argc, char** argv) {
+		SDL_Event user_event;
+
+		user_event.type = SDL_QUIT;
+		user_event.user.code = 0;
+		user_event.user.data1 = NULL;
+		user_event.user.data2 = NULL;
+		SDL_PushEvent(&user_event);
+	},
+		[](void* userData, int argc, char** argv) {},
+		"exit",
+		"Terminates the program."
+	};
+
+	DebugUtils::ConsoleThread::AddCommand(&exitCommand);
+
+
+	DebugUtils::ConsoleThread::ShowConsole();
+
+	
 	try
 	{
 
@@ -32,7 +67,9 @@ int main(int argc, char** argv)
 		GetClassInfo(GetModuleHandle(NULL), className, &wndClass);
 		//Vulkan needs "wndClass.hInstance" and "hwnd"
 
-		Scene scene;
+		Renderer renderer(hwnd, SCRWIDTH, SCRHEIGHT);
+
+		Scene scene(renderer);
 
 		scene.Init();
 
@@ -47,7 +84,11 @@ int main(int argc, char** argv)
 	}
 	catch (const std::runtime_error& err)
 	{
-
+		printf(err.what());
+		getchar();
 	}
+
+
+	DebugUtils::ConsoleThread::Shutdown();
 	return 0;
 }
