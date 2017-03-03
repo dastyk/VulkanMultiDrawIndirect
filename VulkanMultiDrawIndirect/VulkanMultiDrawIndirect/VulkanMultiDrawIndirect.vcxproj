@@ -142,9 +142,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
+    <ClInclude Include="Renderer.h" />
     <ClInclude Include="Scene.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="Scene.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
