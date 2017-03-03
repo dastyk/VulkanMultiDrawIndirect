@@ -2,13 +2,13 @@
 #include <SDL.h>
 #include "Scene.h"
 #include <stdexcept>
+#include <vulkan\vulkan.h>
 
 int main(int argc, char** argv)
 {
 
 	try
 	{
-
 
 		if (SDL_Init(SDL_INIT_VIDEO) < 0)
 			exit(1);
