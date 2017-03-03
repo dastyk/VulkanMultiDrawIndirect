@@ -33,8 +33,15 @@ int main(int argc, char** argv)
 		//Vulkan needs "wndClass.hInstance" and "hwnd"
 
 		Scene scene;
+
 		scene.Init();
+
+
+
 		scene.Start();
+
+
+
 		scene.Shutdown();
 
 	}
