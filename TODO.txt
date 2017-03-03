@@ -1,0 +1,12 @@
+1. Finish project.
+
+* Create basic graphics class
+* Create basic window stuff
+* Create basic test scenario.
+* Add obj loader
+* Create swapchain/clear screen.
+* Traditional rendering
+	* Descriptors
+	* Materials
+	* Buffers
+	* Textures
