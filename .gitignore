@@ -13,7 +13,7 @@
 # Build results
 
 [Dd]ebugPublic/
-
+*.exe
 [Rr]eleases/
 [Xx]86/
 [Bb]uild/
