@@ -15,13 +15,20 @@ public:
 
 
 	const void/*Mesh**/ CreateMesh(/*MeshData*/);
-	const void/*Texture2D*/  CreateTexture(const char* path);
-	const void Submit(/*Mesh*/);
-	const void Unsubmit(/*Mesh*/);
+	//const void/*Texture2D*/  CreateTexture(const char* path);
+	//const void Submit(/*Mesh*/);
+	//const void Unsubmit(/*Mesh*/);
 
 private:
 	const void _CreateSurface(HWND hwnd);
 	const void _CreateSwapChain();
+	void _CreateSemaphores(void);
+	bool _AllocateMemory(VkMemoryPropertyFlagBits desiredProps, const VkMemoryRequirements& memReq, VkDeviceMemory& memory);
+	void _CreateOffscreenImage(void);
+	void _CreateOffscreenImageView(void);
+	void _CreateRenderPass(void);
+	void _CreateFramebuffer(void);
+
 private:
 	uint32_t _width;
 	uint32_t _height;
@@ -40,5 +47,11 @@ private:
 	VkSwapchainKHR _swapchain;
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
-
+	VkSemaphore _imageAvailable = VK_NULL_HANDLE;
+	VkSemaphore _renderComplete = VK_NULL_HANDLE;
+	VkImage _offscreenImage = VK_NULL_HANDLE;
+	VkDeviceMemory _offscreenImageMemory = VK_NULL_HANDLE;
+	VkImageView _offscreenImageView = VK_NULL_HANDLE;
+	VkRenderPass _renderPass = VK_NULL_HANDLE;
+	VkFramebuffer _framebuffer = VK_NULL_HANDLE;
 };

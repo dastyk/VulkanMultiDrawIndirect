@@ -93,14 +93,29 @@ int main(int argc, char** argv)
 
 		scene.Init();
 
+		bool quit = false;
+		do
+		{
+			SDL_Event event = {};
+			while (SDL_PollEvent(&event))
+			{
+				if (event.key.keysym.sym == SDLK_ESCAPE)
+				{
+					quit = true;
+				}
 
+				if (event.type == SDL_QUIT)
+				{
+					quit = true;
+				}
+			}
 
-		scene.Start();
-
-		while (true);
+			scene.Start();
+		} while (!quit);
 
 		scene.Shutdown();
 
+		SDL_Quit();
 	}
 	catch (const std::runtime_error& err)
 	{

@@ -4,14 +4,14 @@
 #include <array>
 #include <algorithm>
 
-
+using namespace std;
 
 Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _height(height)
 {
 
 	/************Create Instance*************/
 	const std::vector<const char*> validationLayers = {
-		"VK_LAYER_LUNARG_core_validation"
+		"VK_LAYER_LUNARG_standard_validation"
 	};
 
 	const auto vkAppInfo = &VulkanHelpers::MakeApplicationInfo(
@@ -35,7 +35,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	/*Create debug callback*/
 	VkDebugReportCallbackCreateInfoEXT createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-	createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
+	createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
 	createInfo.pfnCallback = VulkanHelpers::debugCallback;
 
 	if (VulkanHelpers::CreateDebugReportCallbackEXT(_instance, &createInfo, nullptr, &_debugCallback) != VK_SUCCESS) {
@@ -66,8 +66,10 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 
 
 	/*************Create the device**************/
-	auto queueInfo = VulkanHelpers::MakeDeviceQueueCreateInfo(queueIndex, 1);
-	auto lInfo = VulkanHelpers::MakeDeviceCreateInfo(1, &queueInfo);
+	float queuePriority = 1.0f;
+	auto queueInfo = VulkanHelpers::MakeDeviceQueueCreateInfo(queueIndex, 1, &queuePriority);
+	vector<const char*> deviceExtensions = { "VK_KHR_swapchain" };
+	auto lInfo = VulkanHelpers::MakeDeviceCreateInfo(1, &queueInfo, 0, nullptr, nullptr, nullptr, deviceExtensions.size(), deviceExtensions.data());
 	VulkanHelpers::CreateLogicDevice(_devices[0], &lInfo, &_device);
 
 	// Get the queue
@@ -84,21 +86,150 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 
 	_CreateSurface(hwnd);
 	_CreateSwapChain();
-
-
+	_CreateSemaphores();
+	_CreateOffscreenImage();
+	_CreateOffscreenImageView();
+	_CreateRenderPass();
+	_CreateFramebuffer();
 }
 
 Renderer::~Renderer()
 {
+	vkDestroyFramebuffer(_device, _framebuffer, nullptr);
+	vkDestroyRenderPass(_device, _renderPass, nullptr);
+	vkDestroyImageView(_device, _offscreenImageView, nullptr);
+	vkFreeMemory(_device, _offscreenImageMemory, nullptr);
+	vkDestroyImage(_device, _offscreenImage, nullptr);
 	vkDestroyCommandPool(_device, _cmdPool, nullptr);
+	vkDestroySemaphore(_device, _renderComplete, nullptr);
+	vkDestroySemaphore(_device, _imageAvailable, nullptr);
+	vkDestroySwapchainKHR(_device, _swapchain, nullptr);
 	vkDestroyDevice(_device, nullptr);
+	vkDestroySurfaceKHR(_instance, _surface, nullptr);
 	VulkanHelpers::DestroyDebugReportCallbackEXT(_instance, _debugCallback, nullptr);
 	vkDestroyInstance(_instance, nullptr);
 }
 
 void Renderer::Render(void)
 {
+	uint32_t imageIdx;
+	VkResult result = vkAcquireNextImageKHR(_device, _swapchain, UINT64_MAX, _imageAvailable, VK_NULL_HANDLE, &imageIdx);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Swapchain image retrieval not successful");
+	}
 
+	vkQueueWaitIdle(_queue);
+
+	VkCommandBufferBeginInfo commandBufBeginInfo = {};
+	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	commandBufBeginInfo.pNext = nullptr;
+	commandBufBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	commandBufBeginInfo.pInheritanceInfo = nullptr;
+
+	vkBeginCommandBuffer(_cmdBuffer, &commandBufBeginInfo);
+
+	// Transition swapchain image to transfer dst
+	VkImageMemoryBarrier swapchainImageBarrier = {};
+	swapchainImageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	swapchainImageBarrier.pNext = nullptr;
+	swapchainImageBarrier.srcAccessMask = 0;
+	swapchainImageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	swapchainImageBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	swapchainImageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	swapchainImageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	swapchainImageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	swapchainImageBarrier.image = _swapchainImages[imageIdx];
+	swapchainImageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	swapchainImageBarrier.subresourceRange.baseMipLevel = 0;
+	swapchainImageBarrier.subresourceRange.levelCount = 1;
+	swapchainImageBarrier.subresourceRange.baseArrayLayer = 0;
+	swapchainImageBarrier.subresourceRange.layerCount = 1;
+	vkCmdPipelineBarrier(
+		_cmdBuffer,
+		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, &swapchainImageBarrier);
+
+	// Do the actual rendering
+
+	array<VkClearValue, 1> clearValues = {};
+	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
+
+	VkRenderPassBeginInfo beginInfo = {};
+	beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	beginInfo.pNext = nullptr;
+	beginInfo.renderPass = _renderPass;
+	beginInfo.framebuffer = _framebuffer;
+	beginInfo.renderArea = { 0, 0, _swapchainExtent.width, _swapchainExtent.height };
+	beginInfo.clearValueCount = clearValues.size();
+	beginInfo.pClearValues = clearValues.data();
+	vkCmdBeginRenderPass(_cmdBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+
+	vkCmdEndRenderPass(_cmdBuffer);
+
+	// After render pass, the offscreen buffer is in transfer src layout with
+	// subpass dependencies set. Now we can blit to swapchain image before
+	// presenting.
+	VkImageBlit blitRegion = {};
+	blitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	blitRegion.srcSubresource.mipLevel = 0;
+	blitRegion.srcSubresource.baseArrayLayer = 0;
+	blitRegion.srcSubresource.layerCount = 1;
+	blitRegion.srcOffsets[0] = { 0, 0, 0 };
+	blitRegion.srcOffsets[1] = { (int)_swapchainExtent.width, (int)_swapchainExtent.height, 1 };
+	blitRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	blitRegion.dstSubresource.mipLevel = 0;
+	blitRegion.dstSubresource.baseArrayLayer = 0;
+	blitRegion.dstSubresource.layerCount = 1;
+	blitRegion.dstOffsets[0] = { 0, 0, 0 };
+	blitRegion.dstOffsets[1] = { (int)_swapchainExtent.width, (int)_swapchainExtent.height, 1 };
+	vkCmdBlitImage(_cmdBuffer, _offscreenImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, _swapchainImages[imageIdx], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blitRegion, VK_FILTER_LINEAR);
+
+	// When blit is done we transition swapchain image back to present
+	swapchainImageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	swapchainImageBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	swapchainImageBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	swapchainImageBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	vkCmdPipelineBarrier(
+		_cmdBuffer,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, &swapchainImageBarrier);
+
+	vkEndCommandBuffer(_cmdBuffer);
+
+	VkPipelineStageFlags waitDst = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.pNext = nullptr;
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = &_imageAvailable;
+	submitInfo.pWaitDstStageMask = &waitDst;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &_cmdBuffer;
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = &_renderComplete;
+	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+
+	VkPresentInfoKHR presentInfo = {};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.pNext = nullptr;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &_renderComplete;
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &_swapchain;
+	presentInfo.pImageIndices = &imageIdx;
+	presentInfo.pResults = nullptr;
+	vkQueuePresentKHR(_queue, &presentInfo);
 }
 
 const void Renderer::CreateMesh()
@@ -197,7 +328,7 @@ const void Renderer::_CreateSwapChain()
 	swapCreateInfo.imageColorSpace = bestFormat.colorSpace;
 	swapCreateInfo.imageExtent = bestExtent;
 	swapCreateInfo.imageArrayLayers = 1;
-	swapCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	swapCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	swapCreateInfo.preTransform = capabilities.currentTransform;
 	swapCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 	swapCreateInfo.presentMode = bestPresentMode;
@@ -241,5 +372,202 @@ const void Renderer::_CreateSwapChain()
 
 		if (vkCreateImageView(_device, &viewInfo, nullptr, &_swapchainImageViews[i]) != VK_SUCCESS)
 			throw std::runtime_error("Failed to create swapchain image view!");
+	}
+}
+
+void Renderer::_CreateSemaphores(void)
+{
+	VkSemaphoreCreateInfo semaphoreInfo = {};
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	semaphoreInfo.pNext = nullptr;
+	semaphoreInfo.flags = 0;
+
+	VkResult result = vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &_imageAvailable);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Failed to create image available semaphore!");
+	}
+
+	result = vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &_renderComplete);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Failed to create render complete semaphore!");
+	}
+}
+
+bool Renderer::_AllocateMemory(VkMemoryPropertyFlagBits desiredProps, const VkMemoryRequirements& memReq, VkDeviceMemory& memory)
+{
+	uint32_t memTypeBits = memReq.memoryTypeBits;
+	VkDeviceSize memSize = memReq.size;
+
+	VkPhysicalDeviceMemoryProperties memProps;
+	vkGetPhysicalDeviceMemoryProperties(_devices[0], &memProps);
+	for (uint32_t i = 0; i < memProps.memoryTypeCount; ++i)
+	{
+		// Current memory type (i) suitable and the memory has desired properties.
+		if ((memTypeBits & (1 << i)) && ((memProps.memoryTypes[i].propertyFlags & desiredProps) == desiredProps))
+		{
+			VkMemoryAllocateInfo allocInfo = {};
+			allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			allocInfo.pNext = nullptr;
+			allocInfo.allocationSize = memSize;
+			allocInfo.memoryTypeIndex = i;
+
+			VkResult result = vkAllocateMemory(_device, &allocInfo, nullptr, &memory);
+			if (result == VK_SUCCESS)
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+void Renderer::_CreateOffscreenImage(void)
+{
+	VkImageCreateInfo imageInfo = {};
+	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageInfo.pNext = nullptr;
+	imageInfo.flags = 0;
+	imageInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+	imageInfo.extent = { _swapchainExtent.width, _swapchainExtent.height, 1 };
+	imageInfo.mipLevels = 1;
+	imageInfo.arrayLayers = 1;
+	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageInfo.queueFamilyIndexCount = 0;
+	imageInfo.pQueueFamilyIndices = nullptr;
+	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+	VkResult result = vkCreateImage(_device, &imageInfo, nullptr, &_offscreenImage);
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create offscreen image!");
+	}
+
+	VkMemoryRequirements memReq;
+	vkGetImageMemoryRequirements(_device, _offscreenImage, &memReq);
+
+	if (!_AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, memReq, _offscreenImageMemory))
+	{
+		throw runtime_error("Failed to allocate memory for offscreen image!");
+	}
+
+	result = vkBindImageMemory(_device, _offscreenImage, _offscreenImageMemory, 0);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Failed to bind offscreen image to memory!");
+	}
+}
+
+void Renderer::_CreateOffscreenImageView(void)
+{
+	VkImageViewCreateInfo viewInfo = {};
+	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	viewInfo.pNext = nullptr;
+	viewInfo.flags = 0;
+	viewInfo.image = _offscreenImage;
+	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+	viewInfo.components = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY , VK_COMPONENT_SWIZZLE_IDENTITY };
+	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	viewInfo.subresourceRange.baseMipLevel = 0;
+	viewInfo.subresourceRange.levelCount = 1;
+	viewInfo.subresourceRange.baseArrayLayer = 0;
+	viewInfo.subresourceRange.layerCount = 1;
+
+	VkResult result = vkCreateImageView(_device, &viewInfo, nullptr, &_offscreenImageView);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Failed to create offscreen image view!");
+	}
+}
+
+void Renderer::_CreateRenderPass(void)
+{
+	array<VkAttachmentDescription, 1> attachments = {};
+	attachments[0].flags = 0;
+	attachments[0].format = VK_FORMAT_R8G8B8A8_UNORM;
+	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[0].finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+
+	VkAttachmentReference colorRef = {};
+	colorRef.attachment = 0;
+	colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription subpass = {};
+	subpass.flags = 0;
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.inputAttachmentCount = 0;
+	subpass.pInputAttachments = nullptr;
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &colorRef;
+	subpass.pResolveAttachments = nullptr;
+	subpass.pDepthStencilAttachment = nullptr;
+	subpass.preserveAttachmentCount = 0;
+	subpass.pPreserveAttachments = nullptr;
+
+	array<VkSubpassDependency, 2> subpassDependencies = {};
+	subpassDependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+	subpassDependencies[0].dstSubpass = 0;
+	subpassDependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	subpassDependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	subpassDependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	subpassDependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	subpassDependencies[0].dependencyFlags = 0;
+	subpassDependencies[1].srcSubpass = 0;
+	subpassDependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+	subpassDependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	subpassDependencies[1].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+	subpassDependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	subpassDependencies[1].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+	subpassDependencies[1].dependencyFlags = 0;
+
+	VkRenderPassCreateInfo passInfo = {};
+	passInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	passInfo.pNext = nullptr;
+	passInfo.flags = 0;
+	passInfo.attachmentCount = attachments.size();
+	passInfo.pAttachments = attachments.data();
+	passInfo.subpassCount = 1;
+	passInfo.pSubpasses = &subpass;
+	passInfo.dependencyCount = subpassDependencies.size();
+	passInfo.pDependencies = subpassDependencies.data();
+
+	VkResult result = vkCreateRenderPass(_device, &passInfo, nullptr, &_renderPass);
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create render pass!");
+	}
+}
+
+void Renderer::_CreateFramebuffer(void)
+{
+	array<VkImageView, 1> attachments = { _offscreenImageView };
+
+	VkFramebufferCreateInfo framebufferInfo = {};
+	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	framebufferInfo.pNext = nullptr;
+	framebufferInfo.flags = 0;
+	framebufferInfo.renderPass = _renderPass;
+	framebufferInfo.attachmentCount = attachments.size();
+	framebufferInfo.pAttachments = attachments.data();
+	framebufferInfo.width = _swapchainExtent.width;
+	framebufferInfo.height = _swapchainExtent.height;
+	framebufferInfo.layers = 1;
+
+	VkResult result = vkCreateFramebuffer(_device, &framebufferInfo, nullptr, &_framebuffer);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Failed to create framebuffer!");
 	}
 }

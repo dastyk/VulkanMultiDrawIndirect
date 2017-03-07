@@ -13,7 +13,7 @@ Scene::~Scene()
 
 const void Scene::Init()
 {
-	_renderer.CreateMesh();
+	//_renderer.CreateMesh();
 }
 
 const void Scene::Start()
