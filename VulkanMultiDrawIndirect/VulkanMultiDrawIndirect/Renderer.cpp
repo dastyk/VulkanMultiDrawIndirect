@@ -112,6 +112,15 @@ Renderer::~Renderer()
 
 void Renderer::Render(void)
 {
+	uint32_t imageIdx;
+	VkResult result = vkAcquireNextImageKHR(_device, _swapchain, UINT64_MAX, _imageAvailable, VK_NULL_HANDLE, &imageIdx);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Swapchain image retrieval not successful");
+	}
+
+	vkQueueWaitIdle(_queue);
+
 	VkCommandBufferBeginInfo commandBufBeginInfo = {};
 	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	commandBufBeginInfo.pNext = nullptr;
@@ -119,6 +128,33 @@ void Renderer::Render(void)
 	commandBufBeginInfo.pInheritanceInfo = nullptr;
 
 	vkBeginCommandBuffer(_cmdBuffer, &commandBufBeginInfo);
+
+	// Transition swapchain image to transfer dst
+	VkImageMemoryBarrier swapchainImageBarrier = {};
+	swapchainImageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	swapchainImageBarrier.pNext = nullptr;
+	swapchainImageBarrier.srcAccessMask = 0;
+	swapchainImageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	swapchainImageBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	swapchainImageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	swapchainImageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	swapchainImageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	swapchainImageBarrier.image = _swapchainImages[imageIdx];
+	swapchainImageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	swapchainImageBarrier.subresourceRange.baseMipLevel = 0;
+	swapchainImageBarrier.subresourceRange.levelCount = 1;
+	swapchainImageBarrier.subresourceRange.baseArrayLayer = 0;
+	swapchainImageBarrier.subresourceRange.layerCount = 1;
+	vkCmdPipelineBarrier(
+		_cmdBuffer,
+		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, &swapchainImageBarrier);
+
+	// Do the actual rendering
 
 	array<VkClearValue, 1> clearValues = {};
 	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
@@ -136,8 +172,6 @@ void Renderer::Render(void)
 
 	vkCmdEndRenderPass(_cmdBuffer);
 
-	// TODO: Get swapchain image and transition to transfer dst
-
 	// After render pass, the offscreen buffer is in transfer src layout with
 	// subpass dependencies set. Now we can blit to swapchain image before
 	// presenting.
@@ -154,15 +188,48 @@ void Renderer::Render(void)
 	blitRegion.dstSubresource.layerCount = 1;
 	blitRegion.dstOffsets[0] = { 0, 0, 0 };
 	blitRegion.dstOffsets[1] = { (int)_swapchainExtent.width, (int)_swapchainExtent.height, 1 };
-	//vkCmdBlitImage(_cmdBuffer, _offscreenImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, _swapchainImages[imageIdx], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blitRegion, VK_FILTER_LINEAR);
+	vkCmdBlitImage(_cmdBuffer, _offscreenImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, _swapchainImages[imageIdx], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blitRegion, VK_FILTER_LINEAR);
 
-	// TODO: Transfer swapchain image to present src
-
-	// TODO: Submit command buffer, wait for swapchain image and signal render complete
-
-	// TODO: Present image, wait for render complete semaphore
+	// When blit is done we transition swapchain image back to present
+	swapchainImageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	swapchainImageBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	swapchainImageBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	swapchainImageBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	vkCmdPipelineBarrier(
+		_cmdBuffer,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, &swapchainImageBarrier);
 
 	vkEndCommandBuffer(_cmdBuffer);
+
+	VkPipelineStageFlags waitDst = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.pNext = nullptr;
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = &_imageAvailable;
+	submitInfo.pWaitDstStageMask = &waitDst;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &_cmdBuffer;
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = &_renderComplete;
+	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+
+	VkPresentInfoKHR presentInfo = {};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.pNext = nullptr;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &_renderComplete;
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &_swapchain;
+	presentInfo.pImageIndices = &imageIdx;
+	presentInfo.pResults = nullptr;
+	vkQueuePresentKHR(_queue, &presentInfo);
 }
 
 const void Renderer::_CreateSurface(HWND hwnd)
@@ -256,7 +323,7 @@ const void Renderer::_CreateSwapChain()
 	swapCreateInfo.imageColorSpace = bestFormat.colorSpace;
 	swapCreateInfo.imageExtent = bestExtent;
 	swapCreateInfo.imageArrayLayers = 1;
-	swapCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	swapCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	swapCreateInfo.preTransform = capabilities.currentTransform;
 	swapCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 	swapCreateInfo.presentMode = bestPresentMode;
