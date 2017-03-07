@@ -4,7 +4,7 @@
 #include <array>
 #include <algorithm>
 
-
+using namespace std;
 
 Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _height(height)
 {
@@ -86,10 +86,12 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	_CreateSwapChain();
 
 	_CreateOffscreenImage();
+	_CreateRenderPass();
 }
 
 Renderer::~Renderer()
 {
+	vkDestroyRenderPass(_device, _renderPass, nullptr);
 	vkDestroyImage(_device, _offscreenImage, nullptr);
 	vkDestroyCommandPool(_device, _cmdPool, nullptr);
 	vkDestroyDevice(_device, nullptr);
@@ -263,5 +265,52 @@ void Renderer::_CreateOffscreenImage(void)
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create offscreen image!");
+	}
+}
+
+void Renderer::_CreateRenderPass(void)
+{
+	array<VkAttachmentDescription, 1> attachments = {};
+	attachments[0].flags = 0;
+	attachments[0].format = VK_FORMAT_R8G8B8A8_UNORM;
+	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[0].finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+
+	VkAttachmentReference colorRef = {};
+	colorRef.attachment = 0;
+	colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription subpass = {};
+	subpass.flags = 0;
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.inputAttachmentCount = 0;
+	subpass.pInputAttachments = nullptr;
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &colorRef;
+	subpass.pResolveAttachments = nullptr;
+	subpass.pDepthStencilAttachment = nullptr;
+	subpass.preserveAttachmentCount = 0;
+	subpass.pPreserveAttachments = nullptr;
+
+	VkRenderPassCreateInfo passInfo = {};
+	passInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	passInfo.pNext = nullptr;
+	passInfo.flags = 0;
+	passInfo.attachmentCount = attachments.size();
+	passInfo.pAttachments = attachments.data();
+	passInfo.subpassCount = 1;
+	passInfo.pSubpasses = &subpass;
+	passInfo.dependencyCount = 0;
+	passInfo.pDependencies = nullptr;
+
+	VkResult result = vkCreateRenderPass(_device, &passInfo, nullptr, &_renderPass);
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create render pass!");
 	}
 }

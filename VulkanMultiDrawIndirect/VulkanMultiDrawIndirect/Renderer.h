@@ -23,6 +23,7 @@ private:
 	const void _CreateSurface(HWND hwnd);
 	const void _CreateSwapChain();
 	void _CreateOffscreenImage(void);
+	void _CreateRenderPass(void);
 
 private:
 	uint32_t _width;
@@ -43,4 +44,5 @@ private:
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
 	VkImage _offscreenImage = VK_NULL_HANDLE;
+	VkRenderPass _renderPass = VK_NULL_HANDLE;
 };
