@@ -8,6 +8,7 @@ class GPUTimer
 	struct ProfileData
 	{
 		uint8_t currentFrame;
+		uint8_t currentTimeFrame;
 		uint32_t* start;
 		uint32_t* end;
 
@@ -17,10 +18,10 @@ public:
 	GPUTimer(VkDevice device, uint8_t queryLatency);
 	~GPUTimer();
 
-	const void Start(VkCommandBuffer& buffer, uint64_t GUID);
-	const void End(VkCommandBuffer& buffer, uint64_t GUID);
-	const void GetTime(uint64_t GUID);
-	const float GetAverageTimePerSecond(uint64_t GUID);
+	const void Start(VkCommandBuffer& buffer, VkPipelineStageFlagBits flags, uint64_t GUID);
+	const void End(VkCommandBuffer& buffer, VkPipelineStageFlagBits flags, uint64_t GUID);
+	const double GetTime(uint64_t GUID);
+	const double GetAverageTimePerSecond(uint64_t GUID);
 
 private:
 	VkDevice _device;
