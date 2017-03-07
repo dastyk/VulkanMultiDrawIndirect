@@ -11,7 +11,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 
 	/************Create Instance*************/
 	const std::vector<const char*> validationLayers = {
-		"VK_LAYER_LUNARG_core_validation"
+		"VK_LAYER_LUNARG_standard_validation"
 	};
 
 	const auto vkAppInfo = &VulkanHelpers::MakeApplicationInfo(
@@ -35,7 +35,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	/*Create debug callback*/
 	VkDebugReportCallbackCreateInfoEXT createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-	createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
+	createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
 	createInfo.pfnCallback = VulkanHelpers::debugCallback;
 
 	if (VulkanHelpers::CreateDebugReportCallbackEXT(_instance, &createInfo, nullptr, &_debugCallback) != VK_SUCCESS) {
@@ -66,8 +66,10 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 
 
 	/*************Create the device**************/
-	auto queueInfo = VulkanHelpers::MakeDeviceQueueCreateInfo(queueIndex, 1);
-	auto lInfo = VulkanHelpers::MakeDeviceCreateInfo(1, &queueInfo);
+	float queuePriority = 1.0f;
+	auto queueInfo = VulkanHelpers::MakeDeviceQueueCreateInfo(queueIndex, 1, &queuePriority);
+	vector<const char*> deviceExtensions = { "VK_KHR_swapchain" };
+	auto lInfo = VulkanHelpers::MakeDeviceCreateInfo(1, &queueInfo, 0, nullptr, nullptr, nullptr, deviceExtensions.size(), deviceExtensions.data());
 	VulkanHelpers::CreateLogicDevice(_devices[0], &lInfo, &_device);
 
 	// Get the queue
