@@ -2,7 +2,6 @@
 
 * GPU Timer
 * Create basic test scenario.
-* Add obj loader
 * Create clear screen.
 * Traditional rendering
 	* Descriptors
