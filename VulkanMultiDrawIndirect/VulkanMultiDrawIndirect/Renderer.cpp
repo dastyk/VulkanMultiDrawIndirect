@@ -92,6 +92,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 Renderer::~Renderer()
 {
 	vkDestroyRenderPass(_device, _renderPass, nullptr);
+	vkFreeMemory(_device, _offscreenImageMemory, nullptr);
 	vkDestroyImage(_device, _offscreenImage, nullptr);
 	vkDestroyCommandPool(_device, _cmdPool, nullptr);
 	vkDestroyDevice(_device, nullptr);
@@ -242,6 +243,35 @@ const void Renderer::_CreateSwapChain()
 	}
 }
 
+bool Renderer::_AllocateMemory(VkMemoryPropertyFlagBits desiredProps, const VkMemoryRequirements& memReq, VkDeviceMemory& memory)
+{
+	uint32_t memTypeBits = memReq.memoryTypeBits;
+	VkDeviceSize memSize = memReq.size;
+
+	VkPhysicalDeviceMemoryProperties memProps;
+	vkGetPhysicalDeviceMemoryProperties(_devices[0], &memProps);
+	for (uint32_t i = 0; i < memProps.memoryTypeCount; ++i)
+	{
+		// Current memory type (i) suitable and the memory has desired properties.
+		if ((memTypeBits & (1 << i)) && ((memProps.memoryTypes[i].propertyFlags & desiredProps) == desiredProps))
+		{
+			VkMemoryAllocateInfo allocInfo = {};
+			allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			allocInfo.pNext = nullptr;
+			allocInfo.allocationSize = memSize;
+			allocInfo.memoryTypeIndex = i;
+
+			VkResult result = vkAllocateMemory(_device, &allocInfo, nullptr, &memory);
+			if (result == VK_SUCCESS)
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 void Renderer::_CreateOffscreenImage(void)
 {
 	VkImageCreateInfo imageInfo = {};
@@ -265,6 +295,20 @@ void Renderer::_CreateOffscreenImage(void)
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create offscreen image!");
+	}
+
+	VkMemoryRequirements memReq;
+	vkGetImageMemoryRequirements(_device, _offscreenImage, &memReq);
+
+	if (!_AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, memReq, _offscreenImageMemory))
+	{
+		throw runtime_error("Failed to allocate memory for offscreen image!");
+	}
+
+	result = vkBindImageMemory(_device, _offscreenImage, _offscreenImageMemory, 0);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Failed to bind offscreen image to memory!");
 	}
 }
 
