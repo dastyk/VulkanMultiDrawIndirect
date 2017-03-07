@@ -2,12 +2,10 @@
 
 
 
-GPUTimer::GPUTimer(VkDevice device, uint8_t queryLatency) : _device(device), _maxCounters(20), _queryLatency(queryLatency)
+GPUTimer::GPUTimer(VkDevice device, uint8_t queryLatency, float timestampPeriod) : _device(device), _maxCounters(20), _queryLatency(queryLatency), _timestampPeriod(timestampPeriod)
 {
 	auto& info = VulkanHelpers::MakeQueryPoolCreateInfo(VK_QUERY_TYPE_TIMESTAMP, _queryLatency*_maxCounters*2);
 	VulkanHelpers::CreateQueryPool(_device, &info, &_pool);
-
-
 
 
 }
@@ -15,6 +13,11 @@ GPUTimer::GPUTimer(VkDevice device, uint8_t queryLatency) : _device(device), _ma
 GPUTimer::~GPUTimer()
 {
 	vkDestroyQueryPool(_device, _pool, nullptr);
+	for (auto& pi : _timers)
+	{
+		delete[] pi.second.start;
+		delete[] pi.second.end;
+	}
 }
 
 
@@ -68,10 +71,18 @@ const void GPUTimer::End(VkCommandBuffer& buffer, VkPipelineStageFlagBits flags,
 
 const double GPUTimer::GetTime(uint64_t GUID)
 {
-	auto& timer = _timers[GUID];
-	uint64_t times[2];
-	vkGetQueryPoolResults(_device, _pool, timer.start[timer.currentTimeFrame], 2, sizeof(uint64_t) * 2, times, 0, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+	auto& find = _timers.find(GUID);
+	double time = 0.0f;
+	if (find != _timers.end())
+	{
+		auto& timer = find->second;
+		uint64_t times[2];
+		vkGetQueryPoolResults(_device, _pool, timer.start[timer.currentTimeFrame], 2, sizeof(uint64_t) * 2, times, 0, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+		auto delta = times[1] - times[0];
+		
+		time = (double)_timestampPeriod * delta;
+	}
+	
 
-
-	return 0.0;
+	return time;
 }

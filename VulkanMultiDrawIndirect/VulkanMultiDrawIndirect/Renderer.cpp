@@ -91,10 +91,17 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	_CreateOffscreenImageView();
 	_CreateRenderPass();
 	_CreateFramebuffer();
+
+	auto prop = VulkanHelpers::GetPhysicalDeviceProperties(_devices[0]);
+	
+	_gpuTimer = new GPUTimer(_device, 1, prop.limits.timestampPeriod);
+
+
 }
 
 Renderer::~Renderer()
 {
+	delete _gpuTimer;
 	vkDestroyFramebuffer(_device, _framebuffer, nullptr);
 	vkDestroyRenderPass(_device, _renderPass, nullptr);
 	vkDestroyImageView(_device, _offscreenImageView, nullptr);
@@ -121,6 +128,9 @@ void Renderer::Render(void)
 
 	vkQueueWaitIdle(_queue);
 
+	printf("GPU Time: %f\n", _gpuTimer->GetTime(0));
+
+
 	VkCommandBufferBeginInfo commandBufBeginInfo = {};
 	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	commandBufBeginInfo.pNext = nullptr;
@@ -128,6 +138,8 @@ void Renderer::Render(void)
 	commandBufBeginInfo.pInheritanceInfo = nullptr;
 
 	vkBeginCommandBuffer(_cmdBuffer, &commandBufBeginInfo);
+	_gpuTimer->Start(_cmdBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
+
 
 	// Transition swapchain image to transfer dst
 	VkImageMemoryBarrier swapchainImageBarrier = {};
@@ -171,7 +183,7 @@ void Renderer::Render(void)
 
 
 	vkCmdEndRenderPass(_cmdBuffer);
-
+	
 	// After render pass, the offscreen buffer is in transfer src layout with
 	// subpass dependencies set. Now we can blit to swapchain image before
 	// presenting.
@@ -203,7 +215,7 @@ void Renderer::Render(void)
 		0, nullptr,
 		0, nullptr,
 		1, &swapchainImageBarrier);
-
+	_gpuTimer->End(_cmdBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0);
 	vkEndCommandBuffer(_cmdBuffer);
 
 	VkPipelineStageFlags waitDst = VK_PIPELINE_STAGE_TRANSFER_BIT;
@@ -230,6 +242,8 @@ void Renderer::Render(void)
 	presentInfo.pImageIndices = &imageIdx;
 	presentInfo.pResults = nullptr;
 	vkQueuePresentKHR(_queue, &presentInfo);
+
+	
 }
 
 const void Renderer::CreateMesh()

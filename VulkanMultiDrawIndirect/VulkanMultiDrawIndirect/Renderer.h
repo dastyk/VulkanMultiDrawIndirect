@@ -3,6 +3,7 @@
 #include <vector>
 #include <SDL.h>
 #include <SDL_syswm.h>
+#include "GPUTimer.h"
 
 #pragma comment(lib, "vulkan-1.lib")
 
@@ -32,7 +33,7 @@ private:
 private:
 	uint32_t _width;
 	uint32_t _height;
-
+	GPUTimer* _gpuTimer;
 
 	VkInstance _instance;
 	std::vector<VkPhysicalDevice> _devices;

@@ -15,7 +15,7 @@ class GPUTimer
 	};
 
 public:
-	GPUTimer(VkDevice device, uint8_t queryLatency);
+	GPUTimer(VkDevice device, uint8_t queryLatency, float timestampPeriod);
 	~GPUTimer();
 
 	const void Start(VkCommandBuffer& buffer, VkPipelineStageFlagBits flags, uint64_t GUID);
@@ -28,6 +28,7 @@ private:
 	VkQueryPool _pool;
 	uint32_t _maxCounters;
 	uint8_t _queryLatency;
+	float _timestampPeriod;
 	std::map<uint64_t, ProfileData> _timers;
 };
 
