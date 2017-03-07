@@ -85,11 +85,12 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	_CreateSurface(hwnd);
 	_CreateSwapChain();
 
-
+	_CreateOffscreenImage();
 }
 
 Renderer::~Renderer()
 {
+	vkDestroyImage(_device, _offscreenImage, nullptr);
 	vkDestroyCommandPool(_device, _cmdPool, nullptr);
 	vkDestroyDevice(_device, nullptr);
 	VulkanHelpers::DestroyDebugReportCallbackEXT(_instance, _debugCallback, nullptr);
@@ -236,5 +237,31 @@ const void Renderer::_CreateSwapChain()
 
 		if (vkCreateImageView(_device, &viewInfo, nullptr, &_swapchainImageViews[i]) != VK_SUCCESS)
 			throw std::runtime_error("Failed to create swapchain image view!");
+	}
+}
+
+void Renderer::_CreateOffscreenImage(void)
+{
+	VkImageCreateInfo imageInfo = {};
+	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageInfo.pNext = nullptr;
+	imageInfo.flags = 0;
+	imageInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+	imageInfo.extent = { _swapchainExtent.width, _swapchainExtent.height, 1 };
+	imageInfo.mipLevels = 1;
+	imageInfo.arrayLayers = 1;
+	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageInfo.queueFamilyIndexCount = 0;
+	imageInfo.pQueueFamilyIndices = nullptr;
+	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+	VkResult result = vkCreateImage(_device, &imageInfo, nullptr, &_offscreenImage);
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create offscreen image!");
 	}
 }

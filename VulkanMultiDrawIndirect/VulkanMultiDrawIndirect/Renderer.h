@@ -14,14 +14,16 @@ public:
 	void Render(void);
 
 
-	const void/*Mesh**/ CreateMesh(/*MeshData*/);
-	const void/*Texture2D*/  CreateTexture(const char* path);
-	const void Submit(/*Mesh*/);
-	const void Unsubmit(/*Mesh*/);
+	//const void/*Mesh**/ CreateMesh(/*MeshData*/);
+	//const void/*Texture2D*/  CreateTexture(const char* path);
+	//const void Submit(/*Mesh*/);
+	//const void Unsubmit(/*Mesh*/);
 
 private:
 	const void _CreateSurface(HWND hwnd);
 	const void _CreateSwapChain();
+	void _CreateOffscreenImage(void);
+
 private:
 	uint32_t _width;
 	uint32_t _height;
@@ -40,5 +42,5 @@ private:
 	VkSwapchainKHR _swapchain;
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
-
+	VkImage _offscreenImage = VK_NULL_HANDLE;
 };
