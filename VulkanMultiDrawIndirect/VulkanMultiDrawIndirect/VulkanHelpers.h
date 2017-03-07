@@ -178,6 +178,12 @@ namespace VulkanHelpers
 		VkSamplerCreateFlags							flags					= 0,
 		const void*										pNext					= nullptr);
 
+	VkQueryPoolCreateInfo MakeQueryPoolCreateInfo(
+		VkQueryType										queryType,
+		uint32_t										queryCount,
+		VkQueryPipelineStatisticFlags					pipelineStatistics		= 0,
+		VkQueryPoolCreateFlags							flags					= 0,
+		const void*										pNext					= nullptr);
 
 	/*Creation*/
 	const void CreateInstance(
@@ -290,7 +296,11 @@ namespace VulkanHelpers
 		VkSampler*                                  pSampler,
 		const VkAllocationCallbacks*                pAllocator					= nullptr);
 
-
+	const void CreateQueryPool(
+		VkDevice                                    device,
+		const VkQueryPoolCreateInfo*                pCreateInfo,
+		VkQueryPool*                                pQueryPool,
+		const VkAllocationCallbacks*                pAllocator					= nullptr);
 
 	/*Command recording*/
 	const void BeginCommandBuffer(
