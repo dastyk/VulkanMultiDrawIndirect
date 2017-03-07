@@ -26,6 +26,7 @@ private:
 	void _CreateOffscreenImage(void);
 	void _CreateOffscreenImageView(void);
 	void _CreateRenderPass(void);
+	void _CreateFramebuffer(void);
 
 private:
 	uint32_t _width;
@@ -49,4 +50,5 @@ private:
 	VkDeviceMemory _offscreenImageMemory = VK_NULL_HANDLE;
 	VkImageView _offscreenImageView = VK_NULL_HANDLE;
 	VkRenderPass _renderPass = VK_NULL_HANDLE;
+	VkFramebuffer _framebuffer = VK_NULL_HANDLE;
 };

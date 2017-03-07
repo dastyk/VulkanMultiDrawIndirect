@@ -88,10 +88,12 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	_CreateOffscreenImage();
 	_CreateOffscreenImageView();
 	_CreateRenderPass();
+	_CreateFramebuffer();
 }
 
 Renderer::~Renderer()
 {
+	vkDestroyFramebuffer(_device, _framebuffer, nullptr);
 	vkDestroyRenderPass(_device, _renderPass, nullptr);
 	vkDestroyImageView(_device, _offscreenImageView, nullptr);
 	vkFreeMemory(_device, _offscreenImageMemory, nullptr);
@@ -381,5 +383,27 @@ void Renderer::_CreateRenderPass(void)
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create render pass!");
+	}
+}
+
+void Renderer::_CreateFramebuffer(void)
+{
+	array<VkImageView, 1> attachments = { _offscreenImageView };
+
+	VkFramebufferCreateInfo framebufferInfo = {};
+	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	framebufferInfo.pNext = nullptr;
+	framebufferInfo.flags = 0;
+	framebufferInfo.renderPass = _renderPass;
+	framebufferInfo.attachmentCount = attachments.size();
+	framebufferInfo.pAttachments = attachments.data();
+	framebufferInfo.width = _swapchainExtent.width;
+	framebufferInfo.height = _swapchainExtent.height;
+	framebufferInfo.layers = 1;
+
+	VkResult result = vkCreateFramebuffer(_device, &framebufferInfo, nullptr, &_framebuffer);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Failed to create framebuffer!");
 	}
 }
