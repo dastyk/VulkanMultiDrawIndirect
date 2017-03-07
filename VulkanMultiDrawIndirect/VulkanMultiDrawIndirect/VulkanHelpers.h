@@ -226,6 +226,32 @@ namespace VulkanHelpers
 		VkImage*									pImage,
 		const VkAllocationCallbacks*				pAllocator					= nullptr);
 
+	const void CreateImage2D(
+		VkDevice									device,
+		VkImage*									image,
+		uint32_t									width,
+		uint32_t									height,
+		VkFormat									format,
+		VkImageTiling								tiling,
+		VkImageUsageFlags							usage );
+
+	const void AllocateImageMemory(
+		VkDevice									device,
+		VkPhysicalDevice							physDevice,
+		VkImage										image,
+		VkMemoryPropertyFlags						propertyFlags,
+		VkDeviceMemory*								memory);
+
+	const void TransitionImageLayout(
+		VkDevice									device,
+		VkImage										image,
+		VkCommandBuffer								cmdBuffer,
+		VkFormat									format,
+		VkImageLayout								oldLayout,
+		VkImageLayout								newLayout
+	);
+
+
 	const void CreateDescriptorSetLayout(
 		VkDevice									device,
 		VkDescriptorSetLayout*						pSetLayout,

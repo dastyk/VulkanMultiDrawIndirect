@@ -3,6 +3,7 @@
 #undef max
 #include <array>
 #include <algorithm>
+#include <stb_image.h>
 
 
 
@@ -99,6 +100,121 @@ Renderer::~Renderer()
 void Renderer::Render(void)
 {
 
+}
+
+Texture2D * Renderer::CreateTexture(const char * path)
+{
+	int imageWidth, imageHeight, imageChannels;
+	stbi_uc* imagePixels = stbi_load(path, &imageWidth, &imageHeight, &imageChannels, STBI_rgb_alpha);
+	if (!imagePixels)
+		throw std::runtime_error(std::string("Could not load image: ").append(path));
+
+	VkDeviceSize imageSize = imageWidth * imageHeight * imageChannels;
+
+	VkImage stagingImage;
+	VkDeviceMemory stagingMemory;
+
+	VkImageCreateInfo imageCreateInfo = {};
+	imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageCreateInfo.extent.width = imageWidth;
+	imageCreateInfo.extent.height = imageHeight;
+	imageCreateInfo.extent.depth = 1;
+	imageCreateInfo.mipLevels = 1;
+	imageCreateInfo.arrayLayers = 1;
+	imageCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+	imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+	imageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageCreateInfo.flags = 0;
+
+	VulkanHelpers::CreateImage(_device, &imageCreateInfo, &stagingImage, nullptr); //Throws if failed
+
+	VkMemoryRequirements memoryRequirement;
+	vkGetImageMemoryRequirements(_device, stagingImage, &memoryRequirement);
+
+	VkPhysicalDeviceMemoryProperties memoryProperties;
+	vkGetPhysicalDeviceMemoryProperties(_devices[0], &memoryProperties);
+
+	VkMemoryPropertyFlags desiredProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+	uint32_t memoryTypeIndex = 0;
+	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++)
+	{
+		if ((memoryRequirement.memoryTypeBits & (1 << i)) && (memoryProperties.memoryTypes[i].propertyFlags & desiredProperties))
+		{
+			memoryTypeIndex = i;
+			break;
+		}
+	}
+
+	VkMemoryAllocateInfo memoryAllocateInfo = {};
+	memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	memoryAllocateInfo.allocationSize = memoryRequirement.size;
+	memoryAllocateInfo.memoryTypeIndex = memoryTypeIndex;
+
+	if (vkAllocateMemory(_device, &memoryAllocateInfo, nullptr, &stagingMemory) != VK_SUCCESS)
+		throw std::runtime_error(std::string("Could not allocate memory for staging image: ").append(path));
+
+	if(vkBindImageMemory(_device, stagingImage, stagingMemory, 0) != VK_SUCCESS)
+		throw std::runtime_error(std::string("Could not bind memory to staging image: ").append(path));
+
+	void* data;
+	vkMapMemory(_device, stagingMemory, 0, imageSize, 0, &data);
+
+	VkImageSubresource imageSubresource = {};
+	imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	imageSubresource.mipLevel = 0;
+	imageSubresource.arrayLayer = 0;
+
+	VkSubresourceLayout subresourceLayout;
+	vkGetImageSubresourceLayout(_device, stagingImage, &imageSubresource, &subresourceLayout);
+
+	//If there's no padding issues, just fill it
+	if (subresourceLayout.rowPitch == imageWidth * 4)
+	{
+		memcpy(data, imagePixels, imageSize);
+	}
+	else
+	{
+		//Deal with padding
+		uint8_t* bytes = reinterpret_cast<uint8_t*>(data);
+		for (int row = 0; row < imageHeight; row++)
+		{
+			memcpy(&bytes[row * subresourceLayout.rowPitch], &imagePixels[row * imageWidth * 4], imageWidth * 4);
+		}
+	}
+
+	vkUnmapMemory(_device, stagingMemory);
+	stbi_image_free(imagePixels);
+
+	Texture2D* texture = new Texture2D();
+	VulkanHelpers::CreateImage2D(_device, &(texture->_image), imageWidth, imageHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+	VulkanHelpers::AllocateImageMemory(_device, _devices[0], texture->_image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &(texture->_memory));
+
+	VulkanHelpers::TransitionImageLayout(_device, stagingImage, _cmdBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	VulkanHelpers::TransitionImageLayout(_device, texture->_image, _cmdBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+	VkImageSubresourceLayers srl = {};
+	srl.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	srl.baseArrayLayer = 0;
+	srl.mipLevel = 0;
+	srl.layerCount = 1;
+
+	VkImageCopy region = {};
+	region.srcSubresource = srl;
+	region.dstSubresource = srl;
+	region.srcOffset = { 0,0,0 };
+	region.dstOffset = { 0,0,0 };
+	region.extent.width = imageWidth;
+	region.extent.height = imageHeight;
+	region.extent.depth = 1;
+
+
+
+	return nullptr;
 }
 
 const void Renderer::_CreateSurface(HWND hwnd)

@@ -3,6 +3,7 @@
 #include <vector>
 #include <SDL.h>
 #include <SDL_syswm.h>
+#include "Texture2D.h"
 
 #pragma comment(lib, "vulkan-1.lib")
 
@@ -15,7 +16,7 @@ public:
 
 
 	const void/*Mesh**/ CreateMesh(/*MeshData*/);
-	const void/*Texture2D*/  CreateTexture(const char* path);
+	Texture2D*  CreateTexture(const char* path);
 	const void Submit(/*Mesh*/);
 	const void Unsubmit(/*Mesh*/);
 
@@ -40,5 +41,7 @@ private:
 	VkSwapchainKHR _swapchain;
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
+
+	std::vector<Texture2D*> _textures;
 
 };
