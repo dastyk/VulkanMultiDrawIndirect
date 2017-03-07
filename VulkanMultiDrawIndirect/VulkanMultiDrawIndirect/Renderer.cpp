@@ -232,6 +232,11 @@ void Renderer::Render(void)
 	vkQueuePresentKHR(_queue, &presentInfo);
 }
 
+const void Renderer::CreateMesh()
+{
+	return void();
+}
+
 const void Renderer::_CreateSurface(HWND hwnd)
 {
 	/**************** Set up window surface *******************/

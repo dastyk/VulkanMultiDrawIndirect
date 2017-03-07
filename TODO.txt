@@ -1,10 +1,8 @@
 1. Finish project.
 
-* Create basic graphics class
-* Create basic window stuff
+* GPU Timer
 * Create basic test scenario.
-* Add obj loader
-* Create swapchain/clear screen.
+* Create clear screen.
 * Traditional rendering
 	* Descriptors
 	* Materials

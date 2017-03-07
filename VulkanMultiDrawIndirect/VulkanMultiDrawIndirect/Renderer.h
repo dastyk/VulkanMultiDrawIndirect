@@ -14,7 +14,7 @@ public:
 	void Render(void);
 
 
-	//const void/*Mesh**/ CreateMesh(/*MeshData*/);
+	const void/*Mesh**/ CreateMesh(/*MeshData*/);
 	//const void/*Texture2D*/  CreateTexture(const char* path);
 	//const void Submit(/*Mesh*/);
 	//const void Unsubmit(/*Mesh*/);
