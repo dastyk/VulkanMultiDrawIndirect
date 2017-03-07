@@ -106,7 +106,57 @@ Renderer::~Renderer()
 
 void Renderer::Render(void)
 {
+	VkCommandBufferBeginInfo commandBufBeginInfo = {};
+	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	commandBufBeginInfo.pNext = nullptr;
+	commandBufBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	commandBufBeginInfo.pInheritanceInfo = nullptr;
 
+	vkBeginCommandBuffer(_cmdBuffer, &commandBufBeginInfo);
+
+	array<VkClearValue, 1> clearValues = {};
+	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
+
+	VkRenderPassBeginInfo beginInfo = {};
+	beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	beginInfo.pNext = nullptr;
+	beginInfo.renderPass = _renderPass;
+	beginInfo.framebuffer = _framebuffer;
+	beginInfo.renderArea = { 0, 0, _swapchainExtent.width, _swapchainExtent.height };
+	beginInfo.clearValueCount = clearValues.size();
+	beginInfo.pClearValues = clearValues.data();
+	vkCmdBeginRenderPass(_cmdBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+
+	vkCmdEndRenderPass(_cmdBuffer);
+
+	// TODO: Get swapchain image and transition to transfer dst
+
+	// After render pass, the offscreen buffer is in transfer src layout with
+	// subpass dependencies set. Now we can blit to swapchain image before
+	// presenting.
+	VkImageBlit blitRegion = {};
+	blitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	blitRegion.srcSubresource.mipLevel = 0;
+	blitRegion.srcSubresource.baseArrayLayer = 0;
+	blitRegion.srcSubresource.layerCount = 1;
+	blitRegion.srcOffsets[0] = { 0, 0, 0 };
+	blitRegion.srcOffsets[1] = { (int)_swapchainExtent.width, (int)_swapchainExtent.height, 1 };
+	blitRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	blitRegion.dstSubresource.mipLevel = 0;
+	blitRegion.dstSubresource.baseArrayLayer = 0;
+	blitRegion.dstSubresource.layerCount = 1;
+	blitRegion.dstOffsets[0] = { 0, 0, 0 };
+	blitRegion.dstOffsets[1] = { (int)_swapchainExtent.width, (int)_swapchainExtent.height, 1 };
+	//vkCmdBlitImage(_cmdBuffer, _offscreenImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, _swapchainImages[imageIdx], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blitRegion, VK_FILTER_LINEAR);
+
+	// TODO: Transfer swapchain image to present src
+
+	// TODO: Submit command buffer, wait for swapchain image and signal render complete
+
+	// TODO: Present image, wait for render complete semaphore
+
+	vkEndCommandBuffer(_cmdBuffer);
 }
 
 const void Renderer::_CreateSurface(HWND hwnd)
@@ -368,6 +418,22 @@ void Renderer::_CreateRenderPass(void)
 	subpass.preserveAttachmentCount = 0;
 	subpass.pPreserveAttachments = nullptr;
 
+	array<VkSubpassDependency, 2> subpassDependencies = {};
+	subpassDependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+	subpassDependencies[0].dstSubpass = 0;
+	subpassDependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	subpassDependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	subpassDependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	subpassDependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	subpassDependencies[0].dependencyFlags = 0;
+	subpassDependencies[1].srcSubpass = 0;
+	subpassDependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+	subpassDependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	subpassDependencies[1].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+	subpassDependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	subpassDependencies[1].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+	subpassDependencies[1].dependencyFlags = 0;
+
 	VkRenderPassCreateInfo passInfo = {};
 	passInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	passInfo.pNext = nullptr;
@@ -376,8 +442,8 @@ void Renderer::_CreateRenderPass(void)
 	passInfo.pAttachments = attachments.data();
 	passInfo.subpassCount = 1;
 	passInfo.pSubpasses = &subpass;
-	passInfo.dependencyCount = 0;
-	passInfo.pDependencies = nullptr;
+	passInfo.dependencyCount = subpassDependencies.size();
+	passInfo.pDependencies = subpassDependencies.data();
 
 	VkResult result = vkCreateRenderPass(_device, &passInfo, nullptr, &_renderPass);
 	if (result != VK_SUCCESS)
