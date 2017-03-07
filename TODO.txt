@@ -1,6 +1,5 @@
 1. Finish project.
 
-* CPU timer
 * GPU Timer
 * Create basic test scenario.
 * Add obj loader
