@@ -24,6 +24,7 @@ private:
 	const void _CreateSwapChain();
 	bool _AllocateMemory(VkMemoryPropertyFlagBits desiredProps, const VkMemoryRequirements& memReq, VkDeviceMemory& memory);
 	void _CreateOffscreenImage(void);
+	void _CreateOffscreenImageView(void);
 	void _CreateRenderPass(void);
 
 private:
@@ -46,5 +47,6 @@ private:
 	std::vector<VkImageView> _swapchainImageViews;
 	VkImage _offscreenImage = VK_NULL_HANDLE;
 	VkDeviceMemory _offscreenImageMemory = VK_NULL_HANDLE;
+	VkImageView _offscreenImageView = VK_NULL_HANDLE;
 	VkRenderPass _renderPass = VK_NULL_HANDLE;
 };
