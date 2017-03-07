@@ -84,7 +84,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 
 	_CreateSurface(hwnd);
 	_CreateSwapChain();
-
+	_CreateSemaphores();
 	_CreateOffscreenImage();
 	_CreateOffscreenImageView();
 	_CreateRenderPass();
@@ -99,7 +99,11 @@ Renderer::~Renderer()
 	vkFreeMemory(_device, _offscreenImageMemory, nullptr);
 	vkDestroyImage(_device, _offscreenImage, nullptr);
 	vkDestroyCommandPool(_device, _cmdPool, nullptr);
+	vkDestroySemaphore(_device, _renderComplete, nullptr);
+	vkDestroySemaphore(_device, _imageAvailable, nullptr);
+	vkDestroySwapchainKHR(_device, _swapchain, nullptr);
 	vkDestroyDevice(_device, nullptr);
+	vkDestroySurfaceKHR(_instance, _surface, nullptr);
 	VulkanHelpers::DestroyDebugReportCallbackEXT(_instance, _debugCallback, nullptr);
 	vkDestroyInstance(_instance, nullptr);
 }
@@ -294,6 +298,26 @@ const void Renderer::_CreateSwapChain()
 
 		if (vkCreateImageView(_device, &viewInfo, nullptr, &_swapchainImageViews[i]) != VK_SUCCESS)
 			throw std::runtime_error("Failed to create swapchain image view!");
+	}
+}
+
+void Renderer::_CreateSemaphores(void)
+{
+	VkSemaphoreCreateInfo semaphoreInfo = {};
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	semaphoreInfo.pNext = nullptr;
+	semaphoreInfo.flags = 0;
+
+	VkResult result = vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &_imageAvailable);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Failed to create image available semaphore!");
+	}
+
+	result = vkCreateSemaphore(_device, &semaphoreInfo, nullptr, &_renderComplete);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Failed to create render complete semaphore!");
 	}
 }
 

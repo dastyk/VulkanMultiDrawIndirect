@@ -22,6 +22,7 @@ public:
 private:
 	const void _CreateSurface(HWND hwnd);
 	const void _CreateSwapChain();
+	void _CreateSemaphores(void);
 	bool _AllocateMemory(VkMemoryPropertyFlagBits desiredProps, const VkMemoryRequirements& memReq, VkDeviceMemory& memory);
 	void _CreateOffscreenImage(void);
 	void _CreateOffscreenImageView(void);
@@ -46,6 +47,8 @@ private:
 	VkSwapchainKHR _swapchain;
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
+	VkSemaphore _imageAvailable = VK_NULL_HANDLE;
+	VkSemaphore _renderComplete = VK_NULL_HANDLE;
 	VkImage _offscreenImage = VK_NULL_HANDLE;
 	VkDeviceMemory _offscreenImageMemory = VK_NULL_HANDLE;
 	VkImageView _offscreenImageView = VK_NULL_HANDLE;
