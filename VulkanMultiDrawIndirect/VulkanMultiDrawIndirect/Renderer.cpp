@@ -3,6 +3,7 @@
 #undef max
 #include <array>
 #include <algorithm>
+#define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
 
@@ -109,7 +110,7 @@ Texture2D * Renderer::CreateTexture(const char * path)
 	if (!imagePixels)
 		throw std::runtime_error(std::string("Could not load image: ").append(path));
 
-	VkDeviceSize imageSize = imageWidth * imageHeight * imageChannels;
+	VkDeviceSize imageSize = imageWidth * imageHeight * 4;
 
 	VkImage stagingImage;
 	VkDeviceMemory stagingMemory;
@@ -123,7 +124,7 @@ Texture2D * Renderer::CreateTexture(const char * path)
 	imageCreateInfo.mipLevels = 1;
 	imageCreateInfo.arrayLayers = 1;
 	imageCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-	imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageCreateInfo.tiling = VK_IMAGE_TILING_LINEAR;
 	imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
 	imageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -136,19 +137,25 @@ Texture2D * Renderer::CreateTexture(const char * path)
 	vkGetImageMemoryRequirements(_device, stagingImage, &memoryRequirement);
 
 	VkPhysicalDeviceMemoryProperties memoryProperties;
-	vkGetPhysicalDeviceMemoryProperties(_devices[0], &memoryProperties);
+	vkGetPhysicalDeviceMemoryProperties(_devices[0], &memoryProperties); 
 
 	VkMemoryPropertyFlags desiredProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-	uint32_t memoryTypeIndex = 0;
-	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++)
+	int32_t memoryTypeIndex = -1;
+	for (int32_t i = 0; i < memoryProperties.memoryTypeCount; i++)
 	{
-		if ((memoryRequirement.memoryTypeBits & (1 << i)) && (memoryProperties.memoryTypes[i].propertyFlags & desiredProperties))
+		/*From the documentation:
+		memoryTypeBits is a bitmask and contains one bit set for every supported memory type for the resource.
+		Bit i is set if and only if the memory type i in the VkPhysicalDeviceMemoryProperties structure for the physical device is supported for the resource.*/
+		if ((memoryRequirement.memoryTypeBits & (1 << i)) && (memoryProperties.memoryTypes[i].propertyFlags & desiredProperties) == desiredProperties)
 		{
 			memoryTypeIndex = i;
 			break;
 		}
 	}
+
+	if (memoryTypeIndex < 0)
+		throw std::runtime_error("Failed to find compatible memory type");
 
 	VkMemoryAllocateInfo memoryAllocateInfo = {};
 	memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -193,26 +200,41 @@ Texture2D * Renderer::CreateTexture(const char * path)
 	Texture2D* texture = new Texture2D();
 	VulkanHelpers::CreateImage2D(_device, &(texture->_image), imageWidth, imageHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 	VulkanHelpers::AllocateImageMemory(_device, _devices[0], texture->_image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &(texture->_memory));
+	vkBindImageMemory(_device, texture->_image, texture->_memory, 0);
 
-	VulkanHelpers::TransitionImageLayout(_device, stagingImage, _cmdBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-	VulkanHelpers::TransitionImageLayout(_device, texture->_image, _cmdBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	//VulkanHelpers::BeginCommandBuffer(_cmdBuffer,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+	//VulkanHelpers::TransitionImageLayout(_device, stagingImage, _cmdBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	//VulkanHelpers::TransitionImageLayout(_device, texture->_image, _cmdBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-	VkImageSubresourceLayers srl = {};
-	srl.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	srl.baseArrayLayer = 0;
-	srl.mipLevel = 0;
-	srl.layerCount = 1;
+	//VkImageSubresourceLayers srl = {};
+	//srl.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	//srl.baseArrayLayer = 0;
+	//srl.mipLevel = 0;
+	//srl.layerCount = 1;
 
-	VkImageCopy region = {};
-	region.srcSubresource = srl;
-	region.dstSubresource = srl;
-	region.srcOffset = { 0,0,0 };
-	region.dstOffset = { 0,0,0 };
-	region.extent.width = imageWidth;
-	region.extent.height = imageHeight;
-	region.extent.depth = 1;
+	//VkImageCopy region = {};
+	//region.srcSubresource = srl;
+	//region.dstSubresource = srl;
+	//region.srcOffset = { 0,0,0 };
+	//region.dstOffset = { 0,0,0 };
+	//region.extent.width = imageWidth;
+	//region.extent.height = imageHeight;
+	//region.extent.depth = 1;
 
+	//vkCmdCopyImage(_cmdBuffer, stagingImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture->_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+	//VulkanHelpers::TransitionImageLayout(_device, texture->_image, _cmdBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
+	//VulkanHelpers::EndCommandBuffer(_cmdBuffer);
+
+	//VkSubmitInfo submitInfo = {};
+	//submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	//submitInfo.commandBufferCount = 1;
+	//submitInfo.pCommandBuffers = &_cmdBuffer;
+	//vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+
+	
+	
+	
 
 	return nullptr;
 }
