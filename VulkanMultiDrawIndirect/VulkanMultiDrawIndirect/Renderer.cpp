@@ -219,7 +219,7 @@ Texture2D * Renderer::CreateTexture(const char * path)
 	//region.dstOffset = { 0,0,0 };
 	//region.extent.width = imageWidth;
 	//region.extent.height = imageHeight;
-	//region.extent.depth = 1;
+	//region.extent.depth = 1; 
 
 	//vkCmdCopyImage(_cmdBuffer, stagingImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture->_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 	//VulkanHelpers::TransitionImageLayout(_device, texture->_image, _cmdBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
