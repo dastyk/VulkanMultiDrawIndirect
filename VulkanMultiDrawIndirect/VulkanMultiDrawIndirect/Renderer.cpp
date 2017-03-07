@@ -101,6 +101,11 @@ void Renderer::Render(void)
 
 }
 
+const void Renderer::CreateMesh()
+{
+	return void();
+}
+
 const void Renderer::_CreateSurface(HWND hwnd)
 {
 	/**************** Set up window surface *******************/
