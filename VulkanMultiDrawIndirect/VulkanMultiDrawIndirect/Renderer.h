@@ -13,6 +13,14 @@
 class Renderer
 {
 public:
+	enum class RenderStrategy
+	{
+		Traditional,
+		IndirectRecord,
+		IndirectResubmit
+	};
+
+public:
 	Renderer(HWND hwnd, uint32_t width, uint32_t height);
 	~Renderer();
 	void Render(void);
@@ -23,7 +31,11 @@ public:
 	//const void Submit(/*Mesh*/);
 	//const void Unsubmit(/*Mesh*/);
 
+	void UseStrategy(RenderStrategy strategy);
+
 private:
+	void _RenderSceneTraditional(void);
+	void _BlitSwapchain(void);
 	const void _CreateSurface(HWND hwnd);
 	const void _CreateSwapChain();
 	void _CreateSemaphores(void);
@@ -32,6 +44,8 @@ private:
 	void _CreateOffscreenImageView(void);
 	void _CreateRenderPass(void);
 	void _CreateFramebuffer(void);
+	void _CreateShaders(void);
+	void _CreateShader(const char* shaderCode, VkShaderModule& shader);
 
 private:
 	uint32_t _width;
@@ -62,8 +76,11 @@ private:
 	VkImageView _offscreenImageView = VK_NULL_HANDLE;
 	VkRenderPass _renderPass = VK_NULL_HANDLE;
 	VkFramebuffer _framebuffer = VK_NULL_HANDLE;
-
-
+	VkShaderModule _vertexShader = VK_NULL_HANDLE;
+	VkShaderModule _fragmentShader = VK_NULL_HANDLE;
 
 	VertexBufferHandler* _vertexBufferHandler;
+
+	RenderStrategy _strategy = RenderStrategy::Traditional;
+	RenderStrategy _nextStrategy = RenderStrategy::Traditional;
 };
