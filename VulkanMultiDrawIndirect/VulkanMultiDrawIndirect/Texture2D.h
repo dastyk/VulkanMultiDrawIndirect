@@ -6,9 +6,9 @@
 struct Texture2D
 {
 public:
-	VkImage _image;
-	VkImageView _imageView;
-	VkDeviceMemory _memory;
+	VkImage _image = VK_NULL_HANDLE;
+	VkImageView _imageView = VK_NULL_HANDLE;
+	VkDeviceMemory _memory = VK_NULL_HANDLE;
 };
 
 
