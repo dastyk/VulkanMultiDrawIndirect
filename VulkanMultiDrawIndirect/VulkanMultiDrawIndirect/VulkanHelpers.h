@@ -7,6 +7,7 @@
 #pragma comment(lib,"vulkan-1.lib")
 
 #pragma once
+#define MB *1024*1024
 namespace VulkanHelpers
 {
 
@@ -20,7 +21,7 @@ namespace VulkanHelpers
 		const char* msg,
 		void* userData) {
 
-		printf("validation layer: %s\n", msg);
+		printf("validation layer: %s\n\n", msg);
 		return VK_FALSE;
 	}
 
