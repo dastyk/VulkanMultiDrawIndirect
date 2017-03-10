@@ -101,6 +101,8 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 
 Renderer::~Renderer()
 {
+	vkDeviceWaitIdle(_device);
+
 	delete _gpuTimer;
 	vkDestroyFramebuffer(_device, _framebuffer, nullptr);
 	vkDestroyRenderPass(_device, _renderPass, nullptr);
