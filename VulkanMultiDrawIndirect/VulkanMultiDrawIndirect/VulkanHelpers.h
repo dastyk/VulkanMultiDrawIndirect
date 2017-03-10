@@ -7,6 +7,7 @@
 #pragma comment(lib,"vulkan-1.lib")
 
 #pragma once
+#define MB *1024*1024
 namespace VulkanHelpers
 {
 
