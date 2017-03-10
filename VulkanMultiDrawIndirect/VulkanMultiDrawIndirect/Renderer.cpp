@@ -3,6 +3,7 @@
 #undef max
 #include <array>
 #include <algorithm>
+#include <fstream>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
@@ -107,6 +108,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	pos data[100];
 	_vertexBufferHandler->CreateBuffer(data, 100, VertexType::Position);
 
+	_CreateShaders();
 }
 
 Renderer::~Renderer()
@@ -114,6 +116,8 @@ Renderer::~Renderer()
 	vkDeviceWaitIdle(_device);
 	delete _vertexBufferHandler;
 	delete _gpuTimer;
+	vkDestroyShaderModule(_device, _vertexShader, nullptr);
+	vkDestroyShaderModule(_device, _fragmentShader, nullptr);
 	vkDestroyFramebuffer(_device, _framebuffer, nullptr);
 	vkDestroyRenderPass(_device, _renderPass, nullptr);
 	vkDestroyImageView(_device, _offscreenImageView, nullptr);
@@ -829,4 +833,43 @@ void Renderer::_CreateFramebuffer(void)
 	{
 		throw runtime_error("Failed to create framebuffer!");
 	}
+}
+
+void Renderer::_CreateShaders(void)
+{
+	_CreateShader("../Assets/Shaders/vertex.spv", _vertexShader);
+	_CreateShader("../Assets/Shaders/fragment.spv", _fragmentShader);
+}
+
+void Renderer::_CreateShader(const char * shaderCode, VkShaderModule & shader)
+{
+	// Open the file and read to string
+	ifstream file(shaderCode, ios::binary | ios::ate);
+	if (!file)
+	{
+		throw runtime_error("Failed to open shader file!");
+	}
+
+	streampos codeSize = file.tellg();
+	char* spirv = new char[codeSize];
+	file.seekg(0, ios::beg);
+	file.read(spirv, codeSize);
+	file.close();
+
+	VkShaderModuleCreateInfo shaderInfo = {};
+	shaderInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	shaderInfo.pNext = nullptr;
+	shaderInfo.flags = 0;
+	shaderInfo.codeSize = codeSize;
+	shaderInfo.pCode = (uint32_t*)spirv;
+
+	VkResult result = vkCreateShaderModule(_device, &shaderInfo, nullptr, &shader);
+	if (result != VK_SUCCESS)
+	{
+		delete[] spirv;
+		throw runtime_error("Failed to create shader!");
+	}
+
+	delete[] spirv;
+	spirv = nullptr;
 }

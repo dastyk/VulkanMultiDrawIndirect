@@ -44,6 +44,8 @@ private:
 	void _CreateOffscreenImageView(void);
 	void _CreateRenderPass(void);
 	void _CreateFramebuffer(void);
+	void _CreateShaders(void);
+	void _CreateShader(const char* shaderCode, VkShaderModule& shader);
 
 private:
 	uint32_t _width;
@@ -74,8 +76,8 @@ private:
 	VkImageView _offscreenImageView = VK_NULL_HANDLE;
 	VkRenderPass _renderPass = VK_NULL_HANDLE;
 	VkFramebuffer _framebuffer = VK_NULL_HANDLE;
-
-
+	VkShaderModule _vertexShader = VK_NULL_HANDLE;
+	VkShaderModule _fragmentShader = VK_NULL_HANDLE;
 
 	VertexBufferHandler* _vertexBufferHandler;
 
