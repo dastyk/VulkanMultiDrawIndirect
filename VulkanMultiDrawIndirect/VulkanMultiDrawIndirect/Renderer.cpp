@@ -143,6 +143,8 @@ void Renderer::Render(void)
 {
 	vkQueueWaitIdle(_queue);
 
+	_strategy = _nextStrategy;
+
 	printf("GPU Time: %f\n", _gpuTimer->GetTime(0));
 
 	// Begin rendering stuff while we potentially wait for swapchain image
@@ -323,6 +325,11 @@ Texture2D * Renderer::CreateTexture(const char * path)
 
 	_textures[std::string(path)] = texture;
 	return texture;
+}
+
+void Renderer::UseStrategy(RenderStrategy strategy)
+{
+	_nextStrategy = strategy;
 }
 
 // Render the scene in a traditional manner, i.e. rerecord the draw calls to

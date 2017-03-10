@@ -13,6 +13,14 @@
 class Renderer
 {
 public:
+	enum class RenderStrategy
+	{
+		Traditional,
+		IndirectRecord,
+		IndirectResubmit
+	};
+
+public:
 	Renderer(HWND hwnd, uint32_t width, uint32_t height);
 	~Renderer();
 	void Render(void);
@@ -22,6 +30,8 @@ public:
 	Texture2D*  CreateTexture(const char* path);
 	//const void Submit(/*Mesh*/);
 	//const void Unsubmit(/*Mesh*/);
+
+	void UseStrategy(RenderStrategy strategy);
 
 private:
 	void _RenderSceneTraditional(void);
@@ -68,4 +78,7 @@ private:
 
 
 	VertexBufferHandler* _vertexBufferHandler;
+
+	RenderStrategy _strategy = RenderStrategy::Traditional;
+	RenderStrategy _nextStrategy = RenderStrategy::Traditional;
 };
