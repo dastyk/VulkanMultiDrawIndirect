@@ -3,6 +3,7 @@
 #include <vector>
 #include <SDL.h>
 #include <SDL_syswm.h>
+#include "GPUTimer.h"
 #include "Texture2D.h"
 
 #pragma comment(lib, "vulkan-1.lib")
@@ -17,16 +18,23 @@ public:
 
 	const void/*Mesh**/ CreateMesh(/*MeshData*/);
 	Texture2D*  CreateTexture(const char* path);
-	const void Submit(/*Mesh*/);
-	const void Unsubmit(/*Mesh*/);
+	//const void Submit(/*Mesh*/);
+	//const void Unsubmit(/*Mesh*/);
 
 private:
 	const void _CreateSurface(HWND hwnd);
 	const void _CreateSwapChain();
+	void _CreateSemaphores(void);
+	bool _AllocateMemory(VkMemoryPropertyFlagBits desiredProps, const VkMemoryRequirements& memReq, VkDeviceMemory& memory);
+	void _CreateOffscreenImage(void);
+	void _CreateOffscreenImageView(void);
+	void _CreateRenderPass(void);
+	void _CreateFramebuffer(void);
+
 private:
 	uint32_t _width;
 	uint32_t _height;
-
+	GPUTimer* _gpuTimer;
 
 	VkInstance _instance;
 	std::vector<VkPhysicalDevice> _devices;
@@ -44,4 +52,11 @@ private:
 
 	std::vector<Texture2D*> _textures;
 
+	VkSemaphore _imageAvailable = VK_NULL_HANDLE;
+	VkSemaphore _renderComplete = VK_NULL_HANDLE;
+	VkImage _offscreenImage = VK_NULL_HANDLE;
+	VkDeviceMemory _offscreenImageMemory = VK_NULL_HANDLE;
+	VkImageView _offscreenImageView = VK_NULL_HANDLE;
+	VkRenderPass _renderPass = VK_NULL_HANDLE;
+	VkFramebuffer _framebuffer = VK_NULL_HANDLE;
 };

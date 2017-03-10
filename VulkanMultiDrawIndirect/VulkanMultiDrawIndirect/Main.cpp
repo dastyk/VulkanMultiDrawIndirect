@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <ConsoleThread.h>
 #include <SDL_syswm.h>
+#include <Parsers.h>
+
 #define SCRWIDTH (800)
 #define SCRHEIGHT (640)
 
@@ -42,6 +44,24 @@ int main(int argc, char** argv)
 
 	DebugUtils::ConsoleThread::AddCommand(&exitCommand);
 
+	DebugUtils::DebugConsole::Command_Structure parseObjCmd =
+	{
+		nullptr,
+		[](void* userData, int argc, char** argv) {
+		ArfData::Data data;
+		ArfData::DataPointers datap;
+		int res = ParseObj(argv[1], &data, &datap);
+
+
+		printf("Result: %d\n", res);
+	},
+		[](void* userData, int argc, char** argv) {},
+		"Parse",
+		"Parses an obj."
+	};
+
+	DebugUtils::ConsoleThread::AddCommand(&parseObjCmd);
+
 
 	DebugUtils::ConsoleThread::ShowConsole();
 
@@ -73,14 +93,29 @@ int main(int argc, char** argv)
 
 		scene.Init();
 
+		bool quit = false;
+		do
+		{
+			SDL_Event event = {};
+			while (SDL_PollEvent(&event))
+			{
+				if (event.key.keysym.sym == SDLK_ESCAPE)
+				{
+					quit = true;
+				}
 
+				if (event.type == SDL_QUIT)
+				{
+					quit = true;
+				}
+			}
 
-		scene.Start();
-
-
+			scene.Start();
+		} while (!quit);
 
 		scene.Shutdown();
 
+		SDL_Quit();
 	}
 	catch (const std::runtime_error& err)
 	{

@@ -241,6 +241,20 @@ VkSamplerCreateInfo VulkanHelpers::MakeSamplerCreateInfo(VkFilter magFilter, VkF
 	};
 }
 
+VkQueryPoolCreateInfo VulkanHelpers::MakeQueryPoolCreateInfo(VkQueryType queryType, uint32_t queryCount, VkQueryPipelineStatisticFlags pipelineStatistics, VkQueryPoolCreateFlags flags, const void * pNext)
+{
+	VkQueryPoolCreateInfo info =
+	{
+		VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+		pNext,
+		flags,
+		queryType,
+		queryCount,
+		pipelineStatistics
+	};
+	return info;
+}
+
 
 const void VulkanHelpers::CreateInstance(const VkInstanceCreateInfo * pCreateInfo, VkInstance * pInstance, const VkAllocationCallbacks * pAllocator)
 {
@@ -524,6 +538,14 @@ const void VulkanHelpers::CreateSampler(VkDevice device, const VkSamplerCreateIn
 	VkResult r = vkCreateSampler(device, pCreateInfo, pAllocator, pSampler);
 	if (r != VK_SUCCESS) {
 		throw std::runtime_error("Could not create sampler");
+	}
+}
+
+const void VulkanHelpers::CreateQueryPool(VkDevice device, const VkQueryPoolCreateInfo * pCreateInfo, VkQueryPool * pQueryPool, const VkAllocationCallbacks * pAllocator)
+{
+	VkResult r = vkCreateQueryPool(device, pCreateInfo, pAllocator, pQueryPool);
+	if (r != VK_SUCCESS) {
+		throw std::runtime_error("Could not create query pool");
 	}
 }
 
