@@ -4,6 +4,7 @@
 #include <SDL.h>
 #include <SDL_syswm.h>
 #include "GPUTimer.h"
+#include "VertexBufferHandler.h"
 
 #pragma comment(lib, "vulkan-1.lib")
 
@@ -56,4 +57,8 @@ private:
 	VkImageView _offscreenImageView = VK_NULL_HANDLE;
 	VkRenderPass _renderPass = VK_NULL_HANDLE;
 	VkFramebuffer _framebuffer = VK_NULL_HANDLE;
+
+
+
+	VertexBufferHandler* _vertexBufferHandler;
 };

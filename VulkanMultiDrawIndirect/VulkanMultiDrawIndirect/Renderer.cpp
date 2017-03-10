@@ -96,13 +96,21 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	
 	_gpuTimer = new GPUTimer(_device, 1, prop.limits.timestampPeriod);
 
+	_vertexBufferHandler = new VertexBufferHandler(_devices[0], _device, _queue, _cmdBuffer);
+
+	struct pos
+	{
+		float e[3];
+	};
+	pos data[100];
+	_vertexBufferHandler->CreateBuffer(data, 100, VertexType::Position);
 
 }
 
 Renderer::~Renderer()
 {
 	vkDeviceWaitIdle(_device);
-
+	delete _vertexBufferHandler;
 	delete _gpuTimer;
 	vkDestroyFramebuffer(_device, _framebuffer, nullptr);
 	vkDestroyRenderPass(_device, _renderPass, nullptr);

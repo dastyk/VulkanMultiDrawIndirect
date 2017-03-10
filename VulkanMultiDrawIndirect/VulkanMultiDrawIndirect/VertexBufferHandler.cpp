@@ -4,28 +4,31 @@
 
 VertexBufferHandler::VertexBufferHandler(VkPhysicalDevice phydev, VkDevice device, VkQueue queue, VkCommandBuffer cmdBuffer) : _phydev(phydev), _device(device), _queue(queue), _cmdBuffer(cmdBuffer)
 {
+	_CreateBufferSet(VertexType::Position);
+	_CreateBufferSet(VertexType::TexCoord);
+	_CreateBufferSet(VertexType::Normal);
 }
 
 
 VertexBufferHandler::~VertexBufferHandler()
 {
+	for (auto& set : _bufferSets)
+	{
+		vkDestroyBuffer(_device, set.second.buffer, nullptr);
+		vkFreeMemory(_device, set.second.memory, nullptr);
+	}
 }
 
-const uint32_t VertexBufferHandler::CreateBuffer(void * data, uint32_t byteWidth, uint32_t numElements)
+const uint32_t VertexBufferHandler::CreateBuffer(void* data, uint32_t numElements, VertexType type)
 {
-	auto& find = _bufferSets.find(byteWidth);
-	auto& bufferSet = _bufferSets[byteWidth];
-	if (find == _bufferSets.end())
-	{
-		// Bufferset of this bytewidth not found, create it
-		_CreateBufferSet(bufferSet, byteWidth, (100 MB) / byteWidth);
-	}
-
+	auto& bufferSet = _bufferSets[VertexType::Position];
+	auto byteWidth = TypeSize(type);
 	VkDeviceSize totalSize = byteWidth*numElements;
 	if (bufferSet.firstFree + numElements > bufferSet.maxCount)
 		throw std::runtime_error("Bufferset is full.");
 
 	uint32_t offset = bufferSet.firstFree;
+	bufferSet.firstFree += numElements;
 
 	/* Create a staging buffer*/
 	VkBuffer stagingBuffer;
@@ -43,14 +46,28 @@ const uint32_t VertexBufferHandler::CreateBuffer(void * data, uint32_t byteWidth
 	
 	/*Copy data to the actual buffer*/
 	VulkanHelpers::BeginCommandBuffer(_cmdBuffer);
-	VulkanHelpers::CopyDataBetweenBuffers(_cmdBuffer, stagingBuffer, 0, bufferSet.buffer, offset, totalSize);
+	VulkanHelpers::CopyDataBetweenBuffers(_cmdBuffer, stagingBuffer, 0, bufferSet.buffer, offset*byteWidth, totalSize);
 	vkEndCommandBuffer(_cmdBuffer);
 	auto& sInfo = VulkanHelpers::MakeSubmitInfo(1, &_cmdBuffer);
 	VulkanHelpers::QueueSubmit(_queue, 1, &sInfo);
 	vkQueueWaitIdle(_queue);
+
+	/* Free staging buffer*/
+	vkDestroyBuffer(_device, stagingBuffer, nullptr);
+	vkFreeMemory(_device, stagingMemory, nullptr);
+
+	return offset;
+
 }
 
-const void VertexBufferHandler::_CreateBufferSet(BufferSet & set, uint32_t byteWidth, uint32_t maxCount)
+const void VertexBufferHandler::_CreateBufferSet(VertexType type)
 {
-	return void();
+	auto& set = _bufferSets[type];
+	auto byteWidth = TypeSize(type);
+	set.maxCount = (100 MB) / byteWidth;
+	set.firstFree = 0;
+	VulkanHelpers::CreateBuffer(_phydev, _device, 100 MB,
+		VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		&set.buffer, &set.memory);
 }
