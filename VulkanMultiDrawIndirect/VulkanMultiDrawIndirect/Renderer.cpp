@@ -143,7 +143,7 @@ void Renderer::Render(void)
 {
 	vkQueueWaitIdle(_queue);
 
-	printf("GPU Time: %f\n", _gpuTimer->GetTime(0));
+	//printf("GPU Time: %f\n", _gpuTimer->GetTime(0));
 
 	VkCommandBufferBeginInfo commandBufBeginInfo = {};
 	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
