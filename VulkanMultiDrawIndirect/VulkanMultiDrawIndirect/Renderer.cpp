@@ -107,6 +107,11 @@ Renderer::~Renderer()
 	vkDestroyFramebuffer(_device, _framebuffer, nullptr);
 	vkDestroyRenderPass(_device, _renderPass, nullptr);
 	vkDestroyImageView(_device, _offscreenImageView, nullptr);
+	for (auto& texture : _textures)
+	{
+		vkDestroyImage(_device, (texture.second)->_image, nullptr);
+		vkFreeMemory(_device, texture.second->_memory, nullptr);
+	}
 	vkFreeMemory(_device, _offscreenImageMemory, nullptr);
 	vkDestroyImage(_device, _offscreenImage, nullptr);
 	vkDestroyCommandPool(_device, _cmdPool, nullptr);
@@ -255,6 +260,11 @@ const void Renderer::CreateMesh()
 
 Texture2D * Renderer::CreateTexture(const char * path)
 {
+	//return nullptr;
+	auto find = _textures.find(std::string(path));
+	if (find != _textures.end())
+		return find->second;
+
 	int imageWidth, imageHeight, imageChannels;
 	stbi_uc* imagePixels = stbi_load(path, &imageWidth, &imageHeight, &imageChannels, STBI_rgb_alpha);
 	if (!imagePixels)
@@ -352,41 +362,50 @@ Texture2D * Renderer::CreateTexture(const char * path)
 	VulkanHelpers::AllocateImageMemory(_device, _devices[0], texture->_image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &(texture->_memory));
 	vkBindImageMemory(_device, texture->_image, texture->_memory, 0);
 
-	//VulkanHelpers::BeginCommandBuffer(_cmdBuffer,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-	//VulkanHelpers::TransitionImageLayout(_device, stagingImage, _cmdBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-	//VulkanHelpers::TransitionImageLayout(_device, texture->_image, _cmdBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-	//VkImageSubresourceLayers srl = {};
-	//srl.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	//srl.baseArrayLayer = 0;
-	//srl.mipLevel = 0;
-	//srl.layerCount = 1;
-
-	//VkImageCopy region = {};
-	//region.srcSubresource = srl;
-	//region.dstSubresource = srl;
-	//region.srcOffset = { 0,0,0 };
-	//region.dstOffset = { 0,0,0 };
-	//region.extent.width = imageWidth;
-	//region.extent.height = imageHeight;
-	//region.extent.depth = 1; 
-
-	//vkCmdCopyImage(_cmdBuffer, stagingImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture->_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-	//VulkanHelpers::TransitionImageLayout(_device, texture->_image, _cmdBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-	//VulkanHelpers::EndCommandBuffer(_cmdBuffer);
-
-	//VkSubmitInfo submitInfo = {};
-	//submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	//submitInfo.commandBufferCount = 1;
-	//submitInfo.pCommandBuffers = &_cmdBuffer;
-	//vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+	VkCommandBufferAllocateInfo cmdBufAllInf = {};
+	cmdBufAllInf.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	cmdBufAllInf.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	cmdBufAllInf.commandPool = _cmdPool;
+	cmdBufAllInf.commandBufferCount = 1;
+	VkCommandBuffer oneTimeBuffer;
+	vkAllocateCommandBuffers(_device, &cmdBufAllInf, &oneTimeBuffer);
 
 	
-	
-	
+	VulkanHelpers::BeginCommandBuffer(oneTimeBuffer,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+	VulkanHelpers::TransitionImageLayout(_device, stagingImage, oneTimeBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	VulkanHelpers::TransitionImageLayout(_device, texture->_image, oneTimeBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-	return nullptr;
+	VkImageSubresourceLayers srl = {};
+	srl.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	srl.baseArrayLayer = 0;
+	srl.mipLevel = 0;
+	srl.layerCount = 1;
+
+	VkImageCopy region = {};
+	region.srcSubresource = srl;
+	region.dstSubresource = srl;
+	region.srcOffset = { 0,0,0 };
+	region.dstOffset = { 0,0,0 };
+	region.extent.width = imageWidth;
+	region.extent.height = imageHeight;
+	region.extent.depth = 1; 
+
+	vkCmdCopyImage(oneTimeBuffer, stagingImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture->_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+	VulkanHelpers::TransitionImageLayout(_device, texture->_image, oneTimeBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	VulkanHelpers::EndCommandBuffer(oneTimeBuffer);
+
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &oneTimeBuffer;
+	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(_queue);
+	vkFreeCommandBuffers(_device, _cmdPool, 1, &oneTimeBuffer);
+
+	_textures[std::string(path)] = texture;
+
+	return texture;
 }
 
 const void Renderer::_CreateSurface(HWND hwnd)

@@ -3,14 +3,9 @@
 
 #include <vulkan\vulkan.h>
 
-class Texture2D
+struct Texture2D
 {
-	friend class Renderer;
 public:
-	Texture2D();
-	~Texture2D();
-
-private:
 	VkImage _image;
 	VkDeviceMemory _memory;
 };

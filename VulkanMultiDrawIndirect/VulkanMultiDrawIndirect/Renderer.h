@@ -3,6 +3,7 @@
 #include <vector>
 #include <SDL.h>
 #include <SDL_syswm.h>
+#include <unordered_map>
 #include "GPUTimer.h"
 #include "Texture2D.h"
 
@@ -50,7 +51,7 @@ private:
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
 
-	std::vector<Texture2D*> _textures;
+	std::unordered_map<std::string, Texture2D*> _textures;
 
 	VkSemaphore _imageAvailable = VK_NULL_HANDLE;
 	VkSemaphore _renderComplete = VK_NULL_HANDLE;
