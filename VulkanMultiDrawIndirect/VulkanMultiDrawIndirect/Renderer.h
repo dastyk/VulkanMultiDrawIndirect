@@ -40,6 +40,7 @@ private:
 	VkDevice _device;
 	VkCommandPool _cmdPool;
 	VkCommandBuffer _cmdBuffer;
+	VkCommandBuffer _blitCmdBuffer;
 	VkQueue _queue;
 	VkDebugReportCallbackEXT _debugCallback;
 	VkSurfaceKHR _surface;
@@ -49,7 +50,7 @@ private:
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
 	VkSemaphore _imageAvailable = VK_NULL_HANDLE;
-	VkSemaphore _renderComplete = VK_NULL_HANDLE;
+	VkSemaphore _swapchainBlitComplete = VK_NULL_HANDLE;
 	VkImage _offscreenImage = VK_NULL_HANDLE;
 	VkDeviceMemory _offscreenImageMemory = VK_NULL_HANDLE;
 	VkImageView _offscreenImageView = VK_NULL_HANDLE;
