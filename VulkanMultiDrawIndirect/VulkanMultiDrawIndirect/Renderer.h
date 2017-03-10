@@ -3,7 +3,9 @@
 #include <vector>
 #include <SDL.h>
 #include <SDL_syswm.h>
+#include <unordered_map>
 #include "GPUTimer.h"
+#include "Texture2D.h"
 #include "VertexBufferHandler.h"
 
 #pragma comment(lib, "vulkan-1.lib")
@@ -17,7 +19,7 @@ public:
 
 
 	const void/*Mesh**/ CreateMesh(/*MeshData*/);
-	//const void/*Texture2D*/  CreateTexture(const char* path);
+	Texture2D*  CreateTexture(const char* path);
 	//const void Submit(/*Mesh*/);
 	//const void Unsubmit(/*Mesh*/);
 
@@ -50,6 +52,9 @@ private:
 	VkSwapchainKHR _swapchain;
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
+
+	std::unordered_map<std::string, Texture2D*> _textures;
+
 	VkSemaphore _imageAvailable = VK_NULL_HANDLE;
 	VkSemaphore _swapchainBlitComplete = VK_NULL_HANDLE;
 	VkImage _offscreenImage = VK_NULL_HANDLE;

@@ -3,6 +3,8 @@
 #undef max
 #include <array>
 #include <algorithm>
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
 
 using namespace std;
 
@@ -31,7 +33,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 		extensions.data()
 	);
 	VulkanHelpers::CreateInstance(&vkInstCreateInfo, &_instance);
-
+	
 	/*Create debug callback*/
 	VkDebugReportCallbackCreateInfoEXT createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
@@ -115,6 +117,12 @@ Renderer::~Renderer()
 	vkDestroyFramebuffer(_device, _framebuffer, nullptr);
 	vkDestroyRenderPass(_device, _renderPass, nullptr);
 	vkDestroyImageView(_device, _offscreenImageView, nullptr);
+	for (auto& texture : _textures)
+	{
+		vkDestroyImageView(_device, (texture.second)->_imageView, nullptr);
+		vkDestroyImage(_device, (texture.second)->_image, nullptr);
+		vkFreeMemory(_device, texture.second->_memory, nullptr);
+	}
 	vkFreeMemory(_device, _offscreenImageMemory, nullptr);
 	vkDestroyImage(_device, _offscreenImage, nullptr);
 	vkDestroyCommandPool(_device, _cmdPool, nullptr);
@@ -294,6 +302,172 @@ void Renderer::Render(void)
 const void Renderer::CreateMesh()
 {
 	return void();
+}
+
+Texture2D * Renderer::CreateTexture(const char * path)
+{
+	auto find = _textures.find(std::string(path));
+	if (find != _textures.end())
+		return find->second;
+
+	int imageWidth, imageHeight, imageChannels;
+	stbi_uc* imagePixels = stbi_load(path, &imageWidth, &imageHeight, &imageChannels, STBI_rgb_alpha);
+	if (!imagePixels)
+		throw std::runtime_error(std::string("Could not load image: ").append(path));
+
+	VkDeviceSize imageSize = imageWidth * imageHeight * 4;
+
+	VkImage stagingImage;
+	VkDeviceMemory stagingMemory;
+
+	VkImageCreateInfo imageCreateInfo = {};
+	imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageCreateInfo.extent.width = imageWidth;
+	imageCreateInfo.extent.height = imageHeight;
+	imageCreateInfo.extent.depth = 1;
+	imageCreateInfo.mipLevels = 1;
+	imageCreateInfo.arrayLayers = 1;
+	imageCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+	imageCreateInfo.tiling = VK_IMAGE_TILING_LINEAR;
+	imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+	imageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageCreateInfo.flags = 0;
+
+	VulkanHelpers::CreateImage(_device, &imageCreateInfo, &stagingImage, nullptr); //Throws if failed
+
+	VkMemoryRequirements memoryRequirement;
+	vkGetImageMemoryRequirements(_device, stagingImage, &memoryRequirement);
+
+	VkPhysicalDeviceMemoryProperties memoryProperties;
+	vkGetPhysicalDeviceMemoryProperties(_devices[0], &memoryProperties); 
+
+	VkMemoryPropertyFlags desiredProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+	int32_t memoryTypeIndex = -1;
+	for (int32_t i = 0; i < memoryProperties.memoryTypeCount; i++)
+	{
+		/*From the documentation:
+		memoryTypeBits is a bitmask and contains one bit set for every supported memory type for the resource.
+		Bit i is set if and only if the memory type i in the VkPhysicalDeviceMemoryProperties structure for the physical device is supported for the resource.*/
+		if ((memoryRequirement.memoryTypeBits & (1 << i)) && (memoryProperties.memoryTypes[i].propertyFlags & desiredProperties) == desiredProperties)
+		{
+			memoryTypeIndex = i;
+			break;
+		}
+	}
+
+	if (memoryTypeIndex < 0)
+		throw std::runtime_error("Failed to find compatible memory type");
+
+	VkMemoryAllocateInfo memoryAllocateInfo = {};
+	memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	memoryAllocateInfo.allocationSize = memoryRequirement.size;
+	memoryAllocateInfo.memoryTypeIndex = memoryTypeIndex;
+
+	if (vkAllocateMemory(_device, &memoryAllocateInfo, nullptr, &stagingMemory) != VK_SUCCESS)
+		throw std::runtime_error(std::string("Could not allocate memory for staging image: ").append(path));
+
+	if(vkBindImageMemory(_device, stagingImage, stagingMemory, 0) != VK_SUCCESS)
+		throw std::runtime_error(std::string("Could not bind memory to staging image: ").append(path));
+
+	void* data;
+	vkMapMemory(_device, stagingMemory, 0, imageSize, 0, &data);
+
+	VkImageSubresource imageSubresource = {};
+	imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	imageSubresource.mipLevel = 0;
+	imageSubresource.arrayLayer = 0;
+
+	VkSubresourceLayout subresourceLayout;
+	vkGetImageSubresourceLayout(_device, stagingImage, &imageSubresource, &subresourceLayout);
+
+	//If there's no padding issues, just fill it
+	if (subresourceLayout.rowPitch == imageWidth * 4)
+	{
+		memcpy(data, imagePixels, imageSize);
+	}
+	else
+	{
+		//Deal with padding
+		uint8_t* bytes = reinterpret_cast<uint8_t*>(data);
+		for (int row = 0; row < imageHeight; row++)
+		{
+			memcpy(&bytes[row * subresourceLayout.rowPitch], &imagePixels[row * imageWidth * 4], imageWidth * 4);
+		}
+	}
+
+	vkUnmapMemory(_device, stagingMemory);
+	stbi_image_free(imagePixels);
+
+	Texture2D* texture = new Texture2D();
+	VulkanHelpers::CreateImage2D(_device, &(texture->_image), imageWidth, imageHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+	VulkanHelpers::AllocateImageMemory(_device, _devices[0], texture->_image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &(texture->_memory));
+	vkBindImageMemory(_device, texture->_image, texture->_memory, 0);
+
+	VkCommandBufferAllocateInfo cmdBufAllInf = {};
+	cmdBufAllInf.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	cmdBufAllInf.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	cmdBufAllInf.commandPool = _cmdPool;
+	cmdBufAllInf.commandBufferCount = 1;
+	VkCommandBuffer oneTimeBuffer;
+	vkAllocateCommandBuffers(_device, &cmdBufAllInf, &oneTimeBuffer);
+
+	
+	VulkanHelpers::BeginCommandBuffer(oneTimeBuffer,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+	VulkanHelpers::TransitionImageLayout(_device, stagingImage, oneTimeBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	VulkanHelpers::TransitionImageLayout(_device, texture->_image, oneTimeBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+	VkImageSubresourceLayers srl = {};
+	srl.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	srl.baseArrayLayer = 0;
+	srl.mipLevel = 0;
+	srl.layerCount = 1;
+
+	VkImageCopy region = {};
+	region.srcSubresource = srl;
+	region.dstSubresource = srl;
+	region.srcOffset = { 0,0,0 };
+	region.dstOffset = { 0,0,0 };
+	region.extent.width = imageWidth;
+	region.extent.height = imageHeight;
+	region.extent.depth = 1; 
+
+	vkCmdCopyImage(oneTimeBuffer, stagingImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture->_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+	VulkanHelpers::TransitionImageLayout(_device, texture->_image, oneTimeBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	VulkanHelpers::EndCommandBuffer(oneTimeBuffer);
+
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &oneTimeBuffer;
+	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(_queue);
+	vkFreeCommandBuffers(_device, _cmdPool, 1, &oneTimeBuffer);
+
+
+	vkDeviceWaitIdle(_device);
+	vkDestroyImage(_device, stagingImage, nullptr);
+	vkFreeMemory(_device, stagingMemory, nullptr);
+
+	VkImageViewCreateInfo viewInfo = {};
+	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	viewInfo.image = texture->_image;
+	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	viewInfo.subresourceRange.baseMipLevel = 0;
+	viewInfo.subresourceRange.baseArrayLayer = 0;
+	viewInfo.subresourceRange.layerCount = 1;
+	viewInfo.subresourceRange.levelCount = 1;
+
+	vkCreateImageView(_device, &viewInfo, nullptr, &(texture->_imageView));
+
+	_textures[std::string(path)] = texture;
+	return texture;
 }
 
 const void Renderer::_CreateSurface(HWND hwnd)
