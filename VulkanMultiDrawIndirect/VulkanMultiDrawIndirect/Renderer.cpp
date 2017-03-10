@@ -145,158 +145,13 @@ void Renderer::Render(void)
 
 	printf("GPU Time: %f\n", _gpuTimer->GetTime(0));
 
-	VkCommandBufferBeginInfo commandBufBeginInfo = {};
-	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	commandBufBeginInfo.pNext = nullptr;
-	commandBufBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	commandBufBeginInfo.pInheritanceInfo = nullptr;
-
-	vkBeginCommandBuffer(_cmdBuffer, &commandBufBeginInfo);
-
-	_gpuTimer->Start(_cmdBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
-
-	// Do the actual rendering
-
-	array<VkClearValue, 1> clearValues = {};
-	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
-
-	VkRenderPassBeginInfo beginInfo = {};
-	beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	beginInfo.pNext = nullptr;
-	beginInfo.renderPass = _renderPass;
-	beginInfo.framebuffer = _framebuffer;
-	beginInfo.renderArea = { 0, 0, _swapchainExtent.width, _swapchainExtent.height };
-	beginInfo.clearValueCount = clearValues.size();
-	beginInfo.pClearValues = clearValues.data();
-	vkCmdBeginRenderPass(_cmdBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-	vkCmdEndRenderPass(_cmdBuffer);
-
-	// TODO: As of now there is no synchronization point between rendering to
-	// the offscreen buffer and using that image as blit source later. At the
-	// place of this comment we could probably issue an event that is waited on
-	// in the blit buffer before blitting to make sure rendering is complete.
-	// Don't forget to reset the event when we have waited on it.
-
-	_gpuTimer->End(_cmdBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0);
-
-	vkEndCommandBuffer(_cmdBuffer);
-
 	// Begin rendering stuff while we potentially wait for swapchain image
+	_RenderSceneTraditional();
 
-	VkSubmitInfo submitInfo = {};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.pNext = nullptr;
-	submitInfo.waitSemaphoreCount = 0;
-	submitInfo.pWaitSemaphores = nullptr;
-	submitInfo.pWaitDstStageMask = nullptr;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &_cmdBuffer;
-	submitInfo.signalSemaphoreCount = 0;
-	submitInfo.pSignalSemaphores = nullptr;
-	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
-
-	// When the scene is rendering we can get the swapchain image and begin
+	// While the scene is rendering we can get the swapchain image and begin
 	// transitioning it. When it's time to blit we must synchronize to make
 	// sure that the image is finished for us to read.
-
-	uint32_t imageIdx;
-	VkResult result = vkAcquireNextImageKHR(_device, _swapchain, UINT64_MAX, _imageAvailable, VK_NULL_HANDLE, &imageIdx);
-	if (result != VK_SUCCESS)
-	{
-		throw runtime_error("Swapchain image retrieval not successful");
-	}
-
-	vkBeginCommandBuffer(_blitCmdBuffer, &commandBufBeginInfo);
-
-	// Transition swapchain image to transfer dst
-	VkImageMemoryBarrier swapchainImageBarrier = {};
-	swapchainImageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	swapchainImageBarrier.pNext = nullptr;
-	swapchainImageBarrier.srcAccessMask = 0;
-	swapchainImageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	swapchainImageBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	swapchainImageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	swapchainImageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	swapchainImageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	swapchainImageBarrier.image = _swapchainImages[imageIdx];
-	swapchainImageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	swapchainImageBarrier.subresourceRange.baseMipLevel = 0;
-	swapchainImageBarrier.subresourceRange.levelCount = 1;
-	swapchainImageBarrier.subresourceRange.baseArrayLayer = 0;
-	swapchainImageBarrier.subresourceRange.layerCount = 1;
-	vkCmdPipelineBarrier(
-		_blitCmdBuffer,
-		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, &swapchainImageBarrier);
-
-	// After render pass, the offscreen buffer is in transfer src layout with
-	// subpass dependencies set. Now we can blit to swapchain image before
-	// presenting.
-	// TODO: Just remember to synchronize here
-	VkImageBlit blitRegion = {};
-	blitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	blitRegion.srcSubresource.mipLevel = 0;
-	blitRegion.srcSubresource.baseArrayLayer = 0;
-	blitRegion.srcSubresource.layerCount = 1;
-	blitRegion.srcOffsets[0] = { 0, 0, 0 };
-	blitRegion.srcOffsets[1] = { (int)_swapchainExtent.width, (int)_swapchainExtent.height, 1 };
-	blitRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	blitRegion.dstSubresource.mipLevel = 0;
-	blitRegion.dstSubresource.baseArrayLayer = 0;
-	blitRegion.dstSubresource.layerCount = 1;
-	blitRegion.dstOffsets[0] = { 0, 0, 0 };
-	blitRegion.dstOffsets[1] = { (int)_swapchainExtent.width, (int)_swapchainExtent.height, 1 };
-	vkCmdBlitImage(_blitCmdBuffer, _offscreenImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, _swapchainImages[imageIdx], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blitRegion, VK_FILTER_LINEAR);
-
-	// When blit is done we transition swapchain image back to present
-	swapchainImageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	swapchainImageBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	swapchainImageBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	swapchainImageBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-	vkCmdPipelineBarrier(
-		_blitCmdBuffer,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, &swapchainImageBarrier);
-
-	vkEndCommandBuffer(_blitCmdBuffer);
-
-	// Submit the blit...
-
-	VkPipelineStageFlags waitDst = VK_PIPELINE_STAGE_TRANSFER_BIT;
-
-	VkSubmitInfo blitSubmitInfo = {};
-	blitSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	blitSubmitInfo.pNext = nullptr;
-	blitSubmitInfo.waitSemaphoreCount = 1;
-	blitSubmitInfo.pWaitSemaphores = &_imageAvailable;
-	blitSubmitInfo.pWaitDstStageMask = &waitDst;
-	blitSubmitInfo.commandBufferCount = 1;
-	blitSubmitInfo.pCommandBuffers = &_blitCmdBuffer;
-	blitSubmitInfo.signalSemaphoreCount = 1;
-	blitSubmitInfo.pSignalSemaphores = &_swapchainBlitComplete;
-	vkQueueSubmit(_queue, 1, &blitSubmitInfo, VK_NULL_HANDLE);
-
-	// ...and present when it's done.
-
-	VkPresentInfoKHR presentInfo = {};
-	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	presentInfo.pNext = nullptr;
-	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &_swapchainBlitComplete;
-	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = &_swapchain;
-	presentInfo.pImageIndices = &imageIdx;
-	presentInfo.pResults = nullptr;
-	vkQueuePresentKHR(_queue, &presentInfo);	
+	_BlitSwapchain();
 }
 
 const void Renderer::CreateMesh()
@@ -468,6 +323,170 @@ Texture2D * Renderer::CreateTexture(const char * path)
 
 	_textures[std::string(path)] = texture;
 	return texture;
+}
+
+// Render the scene in a traditional manner, i.e. rerecord the draw calls to
+// work with a dynamic scene.
+void Renderer::_RenderSceneTraditional(void)
+{
+	VkCommandBufferBeginInfo commandBufBeginInfo = {};
+	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	commandBufBeginInfo.pNext = nullptr;
+	commandBufBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	commandBufBeginInfo.pInheritanceInfo = nullptr;
+
+	vkBeginCommandBuffer(_cmdBuffer, &commandBufBeginInfo);
+
+	_gpuTimer->Start(_cmdBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
+
+	// Do the actual rendering
+
+	array<VkClearValue, 1> clearValues = {};
+	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
+
+	VkRenderPassBeginInfo beginInfo = {};
+	beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	beginInfo.pNext = nullptr;
+	beginInfo.renderPass = _renderPass;
+	beginInfo.framebuffer = _framebuffer;
+	beginInfo.renderArea = { 0, 0, _swapchainExtent.width, _swapchainExtent.height };
+	beginInfo.clearValueCount = clearValues.size();
+	beginInfo.pClearValues = clearValues.data();
+	vkCmdBeginRenderPass(_cmdBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	vkCmdEndRenderPass(_cmdBuffer);
+
+	// TODO: As of now there is no synchronization point between rendering to
+	// the offscreen buffer and using that image as blit source later. At the
+	// place of this comment we could probably issue an event that is waited on
+	// in the blit buffer before blitting to make sure rendering is complete.
+	// Don't forget to reset the event when we have waited on it.
+
+	_gpuTimer->End(_cmdBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0);
+
+	vkEndCommandBuffer(_cmdBuffer);
+
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.pNext = nullptr;
+	submitInfo.waitSemaphoreCount = 0;
+	submitInfo.pWaitSemaphores = nullptr;
+	submitInfo.pWaitDstStageMask = nullptr;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &_cmdBuffer;
+	submitInfo.signalSemaphoreCount = 0;
+	submitInfo.pSignalSemaphores = nullptr;
+	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+}
+
+// Blits the content of the offscreen buffer to the swapchain image before
+// presenting it. The offscreen buffer is assumed to be in the transfer src
+// layout.
+void Renderer::_BlitSwapchain(void)
+{
+	uint32_t imageIdx;
+	VkResult result = vkAcquireNextImageKHR(_device, _swapchain, UINT64_MAX, _imageAvailable, VK_NULL_HANDLE, &imageIdx);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Swapchain image retrieval not successful");
+	}
+
+	VkCommandBufferBeginInfo commandBufBeginInfo = {};
+	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	commandBufBeginInfo.pNext = nullptr;
+	commandBufBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	commandBufBeginInfo.pInheritanceInfo = nullptr;
+
+	vkBeginCommandBuffer(_blitCmdBuffer, &commandBufBeginInfo);
+
+	// Transition swapchain image to transfer dst
+	VkImageMemoryBarrier swapchainImageBarrier = {};
+	swapchainImageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	swapchainImageBarrier.pNext = nullptr;
+	swapchainImageBarrier.srcAccessMask = 0;
+	swapchainImageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	swapchainImageBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	swapchainImageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	swapchainImageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	swapchainImageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	swapchainImageBarrier.image = _swapchainImages[imageIdx];
+	swapchainImageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	swapchainImageBarrier.subresourceRange.baseMipLevel = 0;
+	swapchainImageBarrier.subresourceRange.levelCount = 1;
+	swapchainImageBarrier.subresourceRange.baseArrayLayer = 0;
+	swapchainImageBarrier.subresourceRange.layerCount = 1;
+	vkCmdPipelineBarrier(
+		_blitCmdBuffer,
+		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, &swapchainImageBarrier);
+
+	// After render pass, the offscreen buffer is in transfer src layout with
+	// subpass dependencies set. Now we can blit to swapchain image before
+	// presenting.
+	// TODO: Just remember to synchronize here
+	VkImageBlit blitRegion = {};
+	blitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	blitRegion.srcSubresource.mipLevel = 0;
+	blitRegion.srcSubresource.baseArrayLayer = 0;
+	blitRegion.srcSubresource.layerCount = 1;
+	blitRegion.srcOffsets[0] = { 0, 0, 0 };
+	blitRegion.srcOffsets[1] = { (int)_swapchainExtent.width, (int)_swapchainExtent.height, 1 };
+	blitRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	blitRegion.dstSubresource.mipLevel = 0;
+	blitRegion.dstSubresource.baseArrayLayer = 0;
+	blitRegion.dstSubresource.layerCount = 1;
+	blitRegion.dstOffsets[0] = { 0, 0, 0 };
+	blitRegion.dstOffsets[1] = { (int)_swapchainExtent.width, (int)_swapchainExtent.height, 1 };
+	vkCmdBlitImage(_blitCmdBuffer, _offscreenImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, _swapchainImages[imageIdx], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blitRegion, VK_FILTER_LINEAR);
+
+	// When blit is done we transition swapchain image back to present
+	swapchainImageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	swapchainImageBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	swapchainImageBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	swapchainImageBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	vkCmdPipelineBarrier(
+		_blitCmdBuffer,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, &swapchainImageBarrier);
+
+	vkEndCommandBuffer(_blitCmdBuffer);
+
+	// Submit the blit...
+
+	VkPipelineStageFlags waitDst = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+	VkSubmitInfo blitSubmitInfo = {};
+	blitSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	blitSubmitInfo.pNext = nullptr;
+	blitSubmitInfo.waitSemaphoreCount = 1;
+	blitSubmitInfo.pWaitSemaphores = &_imageAvailable;
+	blitSubmitInfo.pWaitDstStageMask = &waitDst;
+	blitSubmitInfo.commandBufferCount = 1;
+	blitSubmitInfo.pCommandBuffers = &_blitCmdBuffer;
+	blitSubmitInfo.signalSemaphoreCount = 1;
+	blitSubmitInfo.pSignalSemaphores = &_swapchainBlitComplete;
+	vkQueueSubmit(_queue, 1, &blitSubmitInfo, VK_NULL_HANDLE);
+
+	// ...and present when it's done.
+
+	VkPresentInfoKHR presentInfo = {};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.pNext = nullptr;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &_swapchainBlitComplete;
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &_swapchain;
+	presentInfo.pImageIndices = &imageIdx;
+	presentInfo.pResults = nullptr;
+	vkQueuePresentKHR(_queue, &presentInfo);
 }
 
 const void Renderer::_CreateSurface(HWND hwnd)

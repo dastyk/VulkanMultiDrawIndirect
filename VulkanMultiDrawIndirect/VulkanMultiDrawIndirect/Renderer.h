@@ -24,6 +24,8 @@ public:
 	//const void Unsubmit(/*Mesh*/);
 
 private:
+	void _RenderSceneTraditional(void);
+	void _BlitSwapchain(void);
 	const void _CreateSurface(HWND hwnd);
 	const void _CreateSwapChain();
 	void _CreateSemaphores(void);
