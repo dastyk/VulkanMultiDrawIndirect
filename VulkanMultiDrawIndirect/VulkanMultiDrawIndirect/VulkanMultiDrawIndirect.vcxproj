@@ -161,12 +161,14 @@
     <ClCompile Include="GPUTimer.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Timer.cpp" />
+    <ClCompile Include="VertexBufferHandler.cpp" />
     <ClCompile Include="VulkanHelpers.cpp" />
     <ClInclude Include="CPUTimer.h" />
     <ClInclude Include="GPUTimer.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="Scene.h" />
     <ClInclude Include="Timer.h" />
+    <ClInclude Include="VertexBufferHandler.h" />
     <ClInclude Include="VulkanHelpers.h" />
   </ItemGroup>
   <ItemGroup>
