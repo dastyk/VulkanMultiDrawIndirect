@@ -1,8 +1,7 @@
 1. Finish project.
 
-* GPU Timer
+* GPU Timer(Kinda done)
 * Create basic test scenario.
-* Create clear screen.
 * Traditional rendering
 	* Descriptors
 	* Materials
