@@ -21,7 +21,7 @@ namespace VulkanHelpers
 		const char* msg,
 		void* userData) {
 
-		printf("validation layer: %s\n", msg);
+		printf("validation layer: %s\n\n", msg);
 		return VK_FALSE;
 	}
 
