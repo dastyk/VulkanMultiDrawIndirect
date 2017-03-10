@@ -7,6 +7,7 @@ struct Texture2D
 {
 public:
 	VkImage _image;
+	VkImageView _imageView;
 	VkDeviceMemory _memory;
 };
 

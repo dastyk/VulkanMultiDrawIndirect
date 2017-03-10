@@ -33,7 +33,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 		extensions.data()
 	);
 	VulkanHelpers::CreateInstance(&vkInstCreateInfo, &_instance);
-
+	
 	/*Create debug callback*/
 	VkDebugReportCallbackCreateInfoEXT createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
@@ -111,6 +111,7 @@ Renderer::~Renderer()
 	vkDestroyImageView(_device, _offscreenImageView, nullptr);
 	for (auto& texture : _textures)
 	{
+		vkDestroyImageView(_device, (texture.second)->_imageView, nullptr);
 		vkDestroyImage(_device, (texture.second)->_image, nullptr);
 		vkFreeMemory(_device, texture.second->_memory, nullptr);
 	}
@@ -297,7 +298,6 @@ const void Renderer::CreateMesh()
 
 Texture2D * Renderer::CreateTexture(const char * path)
 {
-	//return nullptr;
 	auto find = _textures.find(std::string(path));
 	if (find != _textures.end())
 		return find->second;
@@ -440,8 +440,25 @@ Texture2D * Renderer::CreateTexture(const char * path)
 	vkQueueWaitIdle(_queue);
 	vkFreeCommandBuffers(_device, _cmdPool, 1, &oneTimeBuffer);
 
-	_textures[std::string(path)] = texture;
 
+	vkDeviceWaitIdle(_device);
+	vkDestroyImage(_device, stagingImage, nullptr);
+	vkFreeMemory(_device, stagingMemory, nullptr);
+
+	VkImageViewCreateInfo viewInfo = {};
+	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	viewInfo.image = texture->_image;
+	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	viewInfo.subresourceRange.baseMipLevel = 0;
+	viewInfo.subresourceRange.baseArrayLayer = 0;
+	viewInfo.subresourceRange.layerCount = 1;
+	viewInfo.subresourceRange.levelCount = 1;
+
+	vkCreateImageView(_device, &viewInfo, nullptr, &(texture->_imageView));
+
+	_textures[std::string(path)] = texture;
 	return texture;
 }
 
