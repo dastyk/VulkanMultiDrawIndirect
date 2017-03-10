@@ -112,6 +112,10 @@ Renderer::~Renderer()
 	vkDestroyCommandPool(_device, _cmdPool, nullptr);
 	vkDestroySemaphore(_device, _renderComplete, nullptr);
 	vkDestroySemaphore(_device, _imageAvailable, nullptr);
+	for (auto view : _swapchainImageViews)
+	{
+		vkDestroyImageView(_device, view, nullptr);
+	}
 	vkDestroySwapchainKHR(_device, _swapchain, nullptr);
 	vkDestroyDevice(_device, nullptr);
 	vkDestroySurfaceKHR(_instance, _surface, nullptr);
