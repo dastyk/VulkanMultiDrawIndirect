@@ -38,7 +38,7 @@ layout(location = 0) out vec2 o_TexC;
 
 void main()
 {
-	gl_Position = vec4(g_Positions[gl_VertexIndex], 1.0f) * g_View * g_Proj;
+	gl_Position = g_Proj * g_View * vec4(g_Positions[gl_VertexIndex], 1.0f);
 
 	o_TexC = g_Texcoords[gl_VertexIndex];
 }

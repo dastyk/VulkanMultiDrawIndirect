@@ -174,8 +174,6 @@ void Renderer::Render(void)
 	// transitioning it. When it's time to blit we must synchronize to make
 	// sure that the image is finished for us to read.
 	_BlitSwapchain();
-
-	_renderMeshes.clear();
 }
 
 Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
