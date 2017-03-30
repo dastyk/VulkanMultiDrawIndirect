@@ -13,7 +13,7 @@ Scene::~Scene()
 const void Scene::Init()
 {
 	_camera.setViewportAspectRatio(_renderer.GetAspect());
-	_renderer.SetProjectionMatrix(_camera.projection);
+	_renderer.SetProjectionMatrix(_camera.projection());
 
 
 	_CreateObject("../Assets/Meshes/deer-obj.obj", "../Assets/Textures/deer texture.tga");
