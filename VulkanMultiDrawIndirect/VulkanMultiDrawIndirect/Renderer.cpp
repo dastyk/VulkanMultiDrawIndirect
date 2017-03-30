@@ -4,6 +4,7 @@
 #include <array>
 #include <algorithm>
 #include <fstream>
+#include <Parsers.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
@@ -92,8 +93,12 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	_CreateSemaphores();
 	_CreateOffscreenImage();
 	_CreateOffscreenImageView();
+	_CreateDepthBufferImage();
+	_CreateDepthBufferImageView();
 	_CreateRenderPass();
 	_CreateFramebuffer();
+
+
 
 	auto prop = VulkanHelpers::GetPhysicalDeviceProperties(_devices[0]);
 	
@@ -111,23 +116,34 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	_CreateShaders();
 
 	_CreateVPUniformBuffer();
+
+
+
+	_CreateDescriptorStuff();
 }
 
 Renderer::~Renderer()
 {
 	vkDeviceWaitIdle(_device);
+
+
+	vkDestroyDescriptorSetLayout(_device, _descLayout, nullptr);
+	vkDestroyDescriptorPool(_device, _descPool, nullptr);
 	delete _vertexBufferHandler;
 	delete _gpuTimer;
 	vkDestroyShaderModule(_device, _vertexShader, nullptr);
 	vkDestroyShaderModule(_device, _fragmentShader, nullptr);
 	vkDestroyFramebuffer(_device, _framebuffer, nullptr);
 	vkDestroyRenderPass(_device, _renderPass, nullptr);
+	vkDestroyImageView(_device, _depthBufferImageView, nullptr);
+	vkDestroyImage(_device, _depthBufferImage, nullptr);
+	vkFreeMemory(_device, _depthBufferImageMemory, nullptr);
 	vkDestroyImageView(_device, _offscreenImageView, nullptr);
 	for (auto& texture : _textures)
 	{
-		vkDestroyImageView(_device, (texture.second)->_imageView, nullptr);
-		vkDestroyImage(_device, (texture.second)->_image, nullptr);
-		vkFreeMemory(_device, texture.second->_memory, nullptr);
+		vkDestroyImageView(_device, texture._imageView, nullptr);
+		vkDestroyImage(_device, texture._image, nullptr);
+		vkFreeMemory(_device, texture._memory, nullptr);
 	}
 	vkDestroyBuffer(_device, _VPUniformBuffer, nullptr);
 	vkFreeMemory(_device, _VPUniformBufferMemory, nullptr);
@@ -167,15 +183,32 @@ void Renderer::Render(void)
 	_BlitSwapchain();
 }
 
-const void Renderer::CreateMesh()
+Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
 {
-	return void();
+	ArfData::Data data;
+	ArfData::DataPointers dataPointers;
+	if (ParseObj(file.c_str(), &data, &dataPointers) != 0)
+	{
+		throw runtime_error("Failed to load mesh from file");
+	}
+
+	uint32_t positionOffset = _vertexBufferHandler->CreateBuffer(dataPointers.positions, data.NumPos, VertexType::Position);
+	uint32_t texcoordOffset = _vertexBufferHandler->CreateBuffer(dataPointers.texCoords, data.NumTex, VertexType::TexCoord);
+	uint32_t normalOffset = _vertexBufferHandler->CreateBuffer(dataPointers.normals, data.NumNorm, VertexType::Normal);
+
+	delete[] dataPointers.buffer;
+	dataPointers.buffer = nullptr;
+
+	uint32_t meshIndex = _meshes.size();
+	_meshes.push_back({ positionOffset, texcoordOffset, normalOffset, data });
+
+	return MeshHandle(meshIndex);
 }
 
-Texture2D * Renderer::CreateTexture(const char * path)
+uint32_t Renderer::CreateTexture(const char * path)
 {
-	auto find = _textures.find(std::string(path));
-	if (find != _textures.end())
+	auto find = _StringToTextureHandle.find(std::string(path));
+	if (find != _StringToTextureHandle.end())
 		return find->second;
 
 	int imageWidth, imageHeight, imageChannels;
@@ -270,10 +303,10 @@ Texture2D * Renderer::CreateTexture(const char * path)
 	vkUnmapMemory(_device, stagingMemory);
 	stbi_image_free(imagePixels);
 
-	Texture2D* texture = new Texture2D();
-	VulkanHelpers::CreateImage2D(_device, &(texture->_image), imageWidth, imageHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-	VulkanHelpers::AllocateImageMemory(_device, _devices[0], texture->_image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &(texture->_memory));
-	vkBindImageMemory(_device, texture->_image, texture->_memory, 0);
+	Texture2D texture;
+	VulkanHelpers::CreateImage2D(_device, &(texture._image), imageWidth, imageHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+	VulkanHelpers::AllocateImageMemory(_device, _devices[0], texture._image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &(texture._memory));
+	vkBindImageMemory(_device, texture._image, texture._memory, 0);
 
 	VkCommandBufferAllocateInfo cmdBufAllInf = {};
 	cmdBufAllInf.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -286,7 +319,7 @@ Texture2D * Renderer::CreateTexture(const char * path)
 	
 	VulkanHelpers::BeginCommandBuffer(oneTimeBuffer,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	VulkanHelpers::TransitionImageLayout(_device, stagingImage, oneTimeBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-	VulkanHelpers::TransitionImageLayout(_device, texture->_image, oneTimeBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	VulkanHelpers::TransitionImageLayout(_device, texture._image, oneTimeBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	VkImageSubresourceLayers srl = {};
 	srl.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -303,8 +336,8 @@ Texture2D * Renderer::CreateTexture(const char * path)
 	region.extent.height = imageHeight;
 	region.extent.depth = 1; 
 
-	vkCmdCopyImage(oneTimeBuffer, stagingImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture->_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-	VulkanHelpers::TransitionImageLayout(_device, texture->_image, oneTimeBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	vkCmdCopyImage(oneTimeBuffer, stagingImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture._image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+	VulkanHelpers::TransitionImageLayout(_device, texture._image, oneTimeBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	VulkanHelpers::EndCommandBuffer(oneTimeBuffer);
 
@@ -323,7 +356,7 @@ Texture2D * Renderer::CreateTexture(const char * path)
 
 	VkImageViewCreateInfo viewInfo = {};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.image = texture->_image;
+	viewInfo.image = texture._image;
 	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	viewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
 	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -332,10 +365,10 @@ Texture2D * Renderer::CreateTexture(const char * path)
 	viewInfo.subresourceRange.layerCount = 1;
 	viewInfo.subresourceRange.levelCount = 1;
 
-	vkCreateImageView(_device, &viewInfo, nullptr, &(texture->_imageView));
-
-	_textures[std::string(path)] = texture;
-	return texture;
+	vkCreateImageView(_device, &viewInfo, nullptr, &(texture._imageView));
+	_StringToTextureHandle[std::string(path)] = _textures.size();
+	_textures.push_back(texture);
+	return _textures.size() - 1;
 }
 
 void Renderer::UseStrategy(RenderStrategy strategy)
@@ -359,8 +392,9 @@ void Renderer::_RenderSceneTraditional(void)
 
 	// Do the actual rendering
 
-	array<VkClearValue, 1> clearValues = {};
+	array<VkClearValue, 2> clearValues = {};
 	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
+	clearValues[1].depthStencil = { 0.0f, 0 };
 
 	VkRenderPassBeginInfo beginInfo = {};
 	beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -757,9 +791,72 @@ void Renderer::_CreateOffscreenImageView(void)
 	}
 }
 
+void Renderer::_CreateDepthBufferImage(void)
+{
+	VkImageCreateInfo imageInfo = {};
+	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageInfo.pNext = nullptr;
+	imageInfo.flags = 0;
+	imageInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageInfo.format = VK_FORMAT_D24_UNORM_S8_UINT;
+	imageInfo.extent = { _swapchainExtent.width, _swapchainExtent.height, 1 };
+	imageInfo.mipLevels = 1;
+	imageInfo.arrayLayers = 1;
+	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageInfo.queueFamilyIndexCount = 0;
+	imageInfo.pQueueFamilyIndices = nullptr;
+	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+	VkResult result = vkCreateImage(_device, &imageInfo, nullptr, &_depthBufferImage);
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create depth buffer!");
+	}
+
+	VkMemoryRequirements memReq;
+	vkGetImageMemoryRequirements(_device, _depthBufferImage, &memReq);
+
+	if (!_AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, memReq, _depthBufferImageMemory))
+	{
+		throw runtime_error("Failed to allocate memory for depth buffer!");
+	}
+
+	result = vkBindImageMemory(_device, _depthBufferImage, _depthBufferImageMemory, 0);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Failed to bind depth buffer to memory!");
+	}
+}
+
+void Renderer::_CreateDepthBufferImageView(void)
+{
+	VkImageViewCreateInfo viewInfo = {};
+	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	viewInfo.pNext = nullptr;
+	viewInfo.flags = 0;
+	viewInfo.image = _depthBufferImage;
+	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.format = VK_FORMAT_D24_UNORM_S8_UINT;
+	viewInfo.components = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY , VK_COMPONENT_SWIZZLE_IDENTITY };
+	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	viewInfo.subresourceRange.baseMipLevel = 0;
+	viewInfo.subresourceRange.levelCount = 1;
+	viewInfo.subresourceRange.baseArrayLayer = 0;
+	viewInfo.subresourceRange.layerCount = 1;
+
+	VkResult result = vkCreateImageView(_device, &viewInfo, nullptr, &_depthBufferImageView);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Failed to create depth buffer image view!");
+	}
+}
+
 void Renderer::_CreateRenderPass(void)
 {
-	array<VkAttachmentDescription, 1> attachments = {};
+	array<VkAttachmentDescription, 2> attachments = {};
 	attachments[0].flags = 0;
 	attachments[0].format = VK_FORMAT_R8G8B8A8_UNORM;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -770,9 +867,23 @@ void Renderer::_CreateRenderPass(void)
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[0].finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
+	attachments[1].flags = 0;
+	attachments[1].format = VK_FORMAT_D24_UNORM_S8_UINT;
+	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
 	VkAttachmentReference colorRef = {};
 	colorRef.attachment = 0;
 	colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkAttachmentReference depthRef = {};
+	depthRef.attachment = 1;
+	depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 	VkSubpassDescription subpass = {};
 	subpass.flags = 0;
@@ -782,7 +893,7 @@ void Renderer::_CreateRenderPass(void)
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &colorRef;
 	subpass.pResolveAttachments = nullptr;
-	subpass.pDepthStencilAttachment = nullptr;
+	subpass.pDepthStencilAttachment = &depthRef;
 	subpass.preserveAttachmentCount = 0;
 	subpass.pPreserveAttachments = nullptr;
 
@@ -822,7 +933,7 @@ void Renderer::_CreateRenderPass(void)
 
 void Renderer::_CreateFramebuffer(void)
 {
-	array<VkImageView, 1> attachments = { _offscreenImageView };
+	array<VkImageView, 2> attachments = { _offscreenImageView, _depthBufferImageView };
 
 	VkFramebufferCreateInfo framebufferInfo = {};
 	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -879,6 +990,76 @@ void Renderer::_CreateShader(const char * shaderCode, VkShaderModule & shader)
 
 	delete[] spirv;
 	spirv = nullptr;
+}
+
+void Renderer::_CreateDescriptorStuff()
+{
+	/* Create the descriptor pool*/
+	std::vector<VkDescriptorPoolSize> _poolSizes = {
+		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4},
+		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1},
+		{VK_DESCRIPTOR_TYPE_SAMPLER, 1}
+	};
+
+
+	VulkanHelpers::CreateDescriptorPool(_device, &_descPool, 0, 10, 3, _poolSizes.data());
+
+
+
+	/* Specify the bindings */
+	std::vector<VkDescriptorSetLayoutBinding> bindings;
+	for (uint32_t i = 0; i < 4; i++)
+	{
+		bindings.push_back({
+			(uint32_t)bindings.size(),
+			VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			1,
+			VK_SHADER_STAGE_VERTEX_BIT,
+			nullptr
+		});
+	}
+
+	bindings.push_back({
+		(uint32_t)bindings.size(),
+		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+		1,
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		nullptr
+	});
+	bindings.push_back({
+		(uint32_t)bindings.size(),
+		VK_DESCRIPTOR_TYPE_SAMPLER,
+		1,
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		nullptr
+	});
+
+
+
+	/* Create the descriptor layout. */
+	VulkanHelpers::CreateDescriptorSetLayout(_device, &_descLayout, bindings.size(), bindings.data());
+
+
+
+	/* Allocate the desciptor set*/
+	VulkanHelpers::AllocateDescriptorSets(_device, _descPool, 1, &_descLayout, &_descSet);
+
+
+
+
+	std::vector<VkWriteDescriptorSet> WriteDS;
+
+	auto& bufferInfo = _vertexBufferHandler->GetBufferInfo();
+	for (uint32_t i = 0; i < bufferInfo.size(); i++) {
+		WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, i, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &bufferInfo[i], nullptr));
+	}
+
+
+	/*Update the descriptor set with the binding data*/
+	vkUpdateDescriptorSets(_device, WriteDS.size(), WriteDS.data(), 0, nullptr);
+
+
+
 }
 
 void Renderer::_CreateVPUniformBuffer()

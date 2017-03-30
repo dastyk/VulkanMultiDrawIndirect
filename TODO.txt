@@ -3,8 +3,9 @@
 * GPU Timer(Kinda done)
 * Create basic test scenario.
 * Traditional rendering
-	* Descriptors
+	* Add constant buffers and sampler and textures to descriptor set.
 	* Materials
-	* Buffers
-	* Textures
+	* Constant Buffer for camera matricies and stuff
+	* Add support for updating translation buffer in vertexbufferhandler
+	* Sampler
 	* Pipeline

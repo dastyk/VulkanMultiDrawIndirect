@@ -8,6 +8,7 @@ enum class VertexType : uint16_t
 	Position = ((1U << 0U) << 8U) | 12U,
 	TexCoord = ((1U << 1U) << 8U) | 8U,
 	Normal = ((1U << 2U) << 8U) | 12U,
+	Translation = ((1U << 2U) << 8U) | 64U
 };
 class VertexBufferHandler
 {
@@ -30,6 +31,9 @@ public:
 	*  - numElements is the number of positions
 	*  - return value is the offset in the memory*/
 	const uint32_t CreateBuffer(void* data, uint32_t numElements, VertexType type);
+
+	std::vector<VkDescriptorBufferInfo> GetBufferInfo();
+
 private:
 	const void _CreateBufferSet(VertexType type);
 private:

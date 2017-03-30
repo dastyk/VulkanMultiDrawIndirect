@@ -1,6 +1,7 @@
 #pragma once
 #include "VulkanHelpers.h"
 #include <vector>
+#include <Parsers.h>
 #include <SDL.h>
 #include <SDL_syswm.h>
 #include <unordered_map>
@@ -14,6 +15,10 @@
 class Renderer
 {
 public:
+	typedef uint32_t MeshHandle;
+	typedef uint32_t TextureHandle;
+	typedef uint32_t TranslationHandle;
+
 	enum class RenderStrategy
 	{
 		Traditional,
@@ -27,8 +32,8 @@ public:
 	void Render(void);
 
 
-	const void/*Mesh**/ CreateMesh(/*MeshData*/);
-	Texture2D*  CreateTexture(const char* path);
+	MeshHandle CreateMesh(const std::string& file);
+	uint32_t  CreateTexture(const char* path);
 	//const void Submit(/*Mesh*/);
 	//const void Unsubmit(/*Mesh*/);
 
@@ -46,6 +51,8 @@ private:
 	bool _AllocateMemory(VkMemoryPropertyFlagBits desiredProps, const VkMemoryRequirements& memReq, VkDeviceMemory& memory);
 	void _CreateOffscreenImage(void);
 	void _CreateOffscreenImageView(void);
+	void _CreateDepthBufferImage(void);
+	void _CreateDepthBufferImageView(void);
 	void _CreateRenderPass(void);
 	void _CreateFramebuffer(void);
 	void _CreateShaders(void);
@@ -57,6 +64,9 @@ private:
 		glm::mat4x4 view = glm::mat4(); //Identity matrix as default.
 		glm::mat4x4 projection = glm::mat4();
 	};
+	void _CreateDescriptorStuff();
+
+
 
 private:
 	uint32_t _width;
@@ -84,12 +94,23 @@ private:
 	VkDeviceMemory _VPUniformBufferMemory;
 	VkBuffer _VPUniformBufferStaging;//Used for updating the uniform buffer
 	VkDeviceMemory _VPUniformBufferMemoryStaging;
+	std::vector<std::tuple<uint32_t, uint32_t, uint32_t, ArfData::Data>> _meshes;
+	VkDescriptorPool _descPool;
+	VkDescriptorSetLayout _descLayout;
+	VkDescriptorSet _descSet;
+
+	std::unordered_map<std::string, uint32_t> _StringToTextureHandle;
+	std::vector<Texture2D> _textures;
+
 
 	VkSemaphore _imageAvailable = VK_NULL_HANDLE;
 	VkSemaphore _swapchainBlitComplete = VK_NULL_HANDLE;
 	VkImage _offscreenImage = VK_NULL_HANDLE;
 	VkDeviceMemory _offscreenImageMemory = VK_NULL_HANDLE;
 	VkImageView _offscreenImageView = VK_NULL_HANDLE;
+	VkImage _depthBufferImage = VK_NULL_HANDLE;
+	VkDeviceMemory _depthBufferImageMemory = VK_NULL_HANDLE;
+	VkImageView _depthBufferImageView = VK_NULL_HANDLE;
 	VkRenderPass _renderPass = VK_NULL_HANDLE;
 	VkFramebuffer _framebuffer = VK_NULL_HANDLE;
 	VkShaderModule _vertexShader = VK_NULL_HANDLE;
