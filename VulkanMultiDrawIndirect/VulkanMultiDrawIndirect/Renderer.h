@@ -46,6 +46,9 @@ private:
 	void _CreateFramebuffer(void);
 	void _CreateShaders(void);
 	void _CreateShader(const char* shaderCode, VkShaderModule& shader);
+	void _CreateDescriptorStuff();
+
+
 
 private:
 	uint32_t _width;
@@ -66,6 +69,10 @@ private:
 	VkSwapchainKHR _swapchain;
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
+
+	VkDescriptorPool _descPool;
+	VkDescriptorSetLayout _descLayout;
+	VkDescriptorSet _descSet;
 
 	std::unordered_map<std::string, Texture2D*> _textures;
 

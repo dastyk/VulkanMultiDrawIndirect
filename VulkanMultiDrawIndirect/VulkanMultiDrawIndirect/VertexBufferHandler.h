@@ -30,6 +30,9 @@ public:
 	*  - numElements is the number of positions
 	*  - return value is the offset in the memory*/
 	const uint32_t CreateBuffer(void* data, uint32_t numElements, VertexType type);
+
+	std::vector<VkDescriptorBufferInfo> GetBufferInfo();
+
 private:
 	const void _CreateBufferSet(VertexType type);
 private:

@@ -873,3 +873,65 @@ void Renderer::_CreateShader(const char * shaderCode, VkShaderModule & shader)
 	delete[] spirv;
 	spirv = nullptr;
 }
+
+void Renderer::_CreateDescriptorStuff()
+{
+	/* Create the descriptor pool*/
+	std::vector<VkDescriptorPoolSize> _poolSizes = {
+		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
+		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1},
+		{VK_DESCRIPTOR_TYPE_SAMPLER, 1}
+	};
+
+
+	VulkanHelpers::CreateDescriptorPool(_device, &_descPool, 0, 10, 3, _poolSizes.data());
+	
+	
+
+	///* Specify the bindings */
+	//std::vector<VkDescriptorSetLayoutBinding> bindings;
+	//for (uint32_t i = 0; i < 3; i++)
+	//{
+	//	bindings.push_back({
+	//		bindings.size(),
+	//		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+	//		1,
+	//		VK_SHADER_STAGE_VERTEX_BIT,
+	//		nullptr
+	//	});
+	//}
+	//
+	//bindings.push_back({
+	//	bindings.size(),
+	//	VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+	//	1,
+	//	VK_SHADER_STAGE_FRAGMENT_BIT,
+	//	nullptr
+	//});
+	//bindings.push_back({
+	//	bindings.size(),
+	//	VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+	//	1,
+	//	VK_SHADER_STAGE_FRAGMENT_BIT,
+	//	nullptr
+	//});
+
+
+
+	///* Create the descriptor layout. */
+	//VulkanHelpers::CreateDescriptorSetLayout(_device, &_descLayout, bindings.size(), bindings.data());
+
+
+
+	///* Allocate the desciptor set*/
+	//VulkanHelpers::AllocateDescriptorSets(_device, _descPool, 1, &_descLayout, &_descSet);
+	//
+
+
+
+	//std::vector<VkWriteDescriptorSet> WriteDS;
+
+
+	
+
+}

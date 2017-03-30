@@ -60,6 +60,23 @@ const uint32_t VertexBufferHandler::CreateBuffer(void* data, uint32_t numElement
 
 }
 
+std::vector<VkDescriptorBufferInfo> VertexBufferHandler::GetBufferInfo()
+{
+	std::vector<VkDescriptorBufferInfo> descBuffInfo;
+
+	for (auto& set : _bufferSets)
+	{
+		auto& buff = set.second;
+		descBuffInfo.push_back({
+			buff.buffer,
+			0,
+			VK_WHOLE_SIZE
+		});
+	}
+
+	return descBuffInfo;
+}
+
 const void VertexBufferHandler::_CreateBufferSet(VertexType type)
 {
 	auto& set = _bufferSets[type];
