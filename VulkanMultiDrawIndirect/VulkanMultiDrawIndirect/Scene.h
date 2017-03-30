@@ -27,7 +27,5 @@ private:
 	Renderer& _renderer;
 
 	std::vector<Object> _objects;
-
-	
 };
 

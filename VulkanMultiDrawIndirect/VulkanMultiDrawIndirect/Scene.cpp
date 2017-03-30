@@ -22,6 +22,7 @@ const void Scene::Init()
 
 const void Scene::Start()
 {
+	//_renderer.Submit(_deer);
 	_renderer.Render();
 }
 
