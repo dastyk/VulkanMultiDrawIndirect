@@ -22,6 +22,7 @@ int main(int argc, char** argv)
 		""
 	};
 
+
 	DebugUtils::ConsoleThread::Init(&def);
 
 	DebugUtils::DebugConsole::Command_Structure exitCommand =

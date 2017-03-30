@@ -7,6 +7,7 @@
 #include "GPUTimer.h"
 #include "Texture2D.h"
 #include "VertexBufferHandler.h"
+#include <glm\glm.hpp>
 
 #pragma comment(lib, "vulkan-1.lib")
 
@@ -31,6 +32,9 @@ public:
 	//const void Submit(/*Mesh*/);
 	//const void Unsubmit(/*Mesh*/);
 
+	void SetViewMatrix(const glm::mat4x4& view);
+	void SetProjectionMatrix(const glm::mat4x4& projection);
+
 	void UseStrategy(RenderStrategy strategy);
 
 private:
@@ -46,6 +50,13 @@ private:
 	void _CreateFramebuffer(void);
 	void _CreateShaders(void);
 	void _CreateShader(const char* shaderCode, VkShaderModule& shader);
+	void _CreateVPUniformBuffer();
+
+	struct VPUniformBuffer
+	{
+		glm::mat4x4 view = glm::mat4(); //Identity matrix as default.
+		glm::mat4x4 projection = glm::mat4();
+	};
 
 private:
 	uint32_t _width;
@@ -68,6 +79,11 @@ private:
 	std::vector<VkImageView> _swapchainImageViews;
 
 	std::unordered_map<std::string, Texture2D*> _textures;
+	//Buffer for the view and projection matrix.
+	VkBuffer _VPUniformBuffer;
+	VkDeviceMemory _VPUniformBufferMemory;
+	VkBuffer _VPUniformBufferStaging;//Used for updating the uniform buffer
+	VkDeviceMemory _VPUniformBufferMemoryStaging;
 
 	VkSemaphore _imageAvailable = VK_NULL_HANDLE;
 	VkSemaphore _swapchainBlitComplete = VK_NULL_HANDLE;

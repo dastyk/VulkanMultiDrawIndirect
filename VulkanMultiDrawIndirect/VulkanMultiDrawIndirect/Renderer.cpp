@@ -109,6 +109,8 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	_vertexBufferHandler->CreateBuffer(data, 100, VertexType::Position);
 
 	_CreateShaders();
+
+	_CreateVPUniformBuffer();
 }
 
 Renderer::~Renderer()
@@ -127,6 +129,11 @@ Renderer::~Renderer()
 		vkDestroyImage(_device, (texture.second)->_image, nullptr);
 		vkFreeMemory(_device, texture.second->_memory, nullptr);
 	}
+	vkDestroyBuffer(_device, _VPUniformBuffer, nullptr);
+	vkFreeMemory(_device, _VPUniformBufferMemory, nullptr);
+	vkDestroyBuffer(_device, _VPUniformBufferStaging, nullptr);
+	vkFreeMemory(_device, _VPUniformBufferMemoryStaging, nullptr);
+
 	vkFreeMemory(_device, _offscreenImageMemory, nullptr);
 	vkDestroyImage(_device, _offscreenImage, nullptr);
 	vkDestroyCommandPool(_device, _cmdPool, nullptr);
@@ -873,3 +880,29 @@ void Renderer::_CreateShader(const char * shaderCode, VkShaderModule & shader)
 	delete[] spirv;
 	spirv = nullptr;
 }
+
+void Renderer::_CreateVPUniformBuffer()
+{
+
+	VkDeviceSize size = sizeof(VPUniformBuffer);
+	VulkanHelpers::CreateBuffer(_devices[0], _device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &_VPUniformBufferStaging, &_VPUniformBufferMemoryStaging);
+	VulkanHelpers::CreateBuffer(_devices[0], _device, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &_VPUniformBuffer, &_VPUniformBufferMemory);
+
+	//Stick an identity matrix into as default
+	void* src;
+	VulkanHelpers::MapMemory(_device, _VPUniformBufferMemoryStaging, &src, sizeof(VPUniformBuffer));
+	VPUniformBuffer def; 
+	memcpy(src, &def, sizeof(VPUniformBuffer));
+	vkUnmapMemory(_device, _VPUniformBufferMemoryStaging);
+
+	VulkanHelpers::BeginCommandBuffer(_cmdBuffer);
+	VulkanHelpers::CopyDataBetweenBuffers(_cmdBuffer, _VPUniformBufferStaging, 0, _VPUniformBuffer, 0, sizeof(VPUniformBuffer));
+	vkEndCommandBuffer(_cmdBuffer);
+	auto& sInfo = VulkanHelpers::MakeSubmitInfo(1, &_cmdBuffer);
+	VulkanHelpers::QueueSubmit(_queue, 1, &sInfo);
+	vkQueueWaitIdle(_queue);
+
+
+}
+
+
