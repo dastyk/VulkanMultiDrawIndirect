@@ -5,7 +5,7 @@
 #include <ConsoleThread.h>
 #include <SDL_syswm.h>
 #include <Parsers.h>
-
+#include "Timer.h"
 #define SCRWIDTH (800)
 #define SCRHEIGHT (640)
 
@@ -120,10 +120,13 @@ int main(int argc, char** argv)
 		Scene scene(renderer);
 
 		scene.Init();
-
+		Timer timer;
+		timer.Reset();
+		timer.Start();
 		bool quit = false;
 		do
 		{
+			timer.Tick();
 			SDL_Event event = {};
 			while (SDL_PollEvent(&event))
 			{
@@ -138,7 +141,9 @@ int main(int argc, char** argv)
 				}
 			}
 
-			scene.Start();
+			scene.Frame(timer.DeltaTime());
+
+			
 		} while (!quit);
 
 		scene.Shutdown();

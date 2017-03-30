@@ -43,7 +43,10 @@ public:
 
 	void UseStrategy(RenderStrategy strategy);
 
+	float GetAspect() { return _width / _height; }
+
 private:
+	void _UpdateViewProjection();
 	void _RenderSceneTraditional(void);
 	void _BlitSwapchain(void);
 	const void _CreateSurface(HWND hwnd);
@@ -93,6 +96,7 @@ private:
 
 	//std::unordered_map<std::string, Texture2D*> _textures;
 	//Buffer for the view and projection matrix.
+	VPUniformBuffer _ViewProjection;
 	VkBuffer _VPUniformBuffer;
 	VkDeviceMemory _VPUniformBufferMemory;
 	VkBuffer _VPUniformBufferStaging;//Used for updating the uniform buffer

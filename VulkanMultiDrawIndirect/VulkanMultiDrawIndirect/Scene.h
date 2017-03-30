@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Renderer.h"
+#include "Camera.h"
 
 class Scene
 {
@@ -9,7 +10,7 @@ class Scene
 		Renderer::MeshHandle mesh;
 		Renderer::TextureHandle texture;
 		Renderer::TranslationHandle translation;
-
+	
 	};
 public:
 	Scene(Renderer& renderer);
@@ -17,15 +18,18 @@ public:
 
 
 	const void Init();
-	const void Start();
+	const void Frame(float dt);
 	const void Shutdown();
 
 private:
 	const void _CreateObject(const char* mesh, const char* texture);
-
 private:
 	Renderer& _renderer;
 
 	std::vector<Object> _objects;
+
+
+	Camera _camera;
+	
 };
 
