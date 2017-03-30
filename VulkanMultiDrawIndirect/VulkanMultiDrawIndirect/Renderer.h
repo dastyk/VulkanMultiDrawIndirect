@@ -34,7 +34,7 @@ public:
 
 	MeshHandle CreateMesh(const std::string& file);
 	uint32_t  CreateTexture(const char* path);
-	//const void Submit(/*Mesh*/);
+	const void Submit(MeshHandle mesh, TextureHandle texture, TranslationHandle translation);
 	//const void Unsubmit(/*Mesh*/);
 
 	void SetViewMatrix(const glm::mat4x4& view);

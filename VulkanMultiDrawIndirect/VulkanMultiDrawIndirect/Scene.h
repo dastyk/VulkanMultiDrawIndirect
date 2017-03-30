@@ -9,6 +9,7 @@ class Scene
 		Renderer::MeshHandle mesh;
 		Renderer::TextureHandle texture;
 		Renderer::TranslationHandle translation;
+
 	};
 public:
 	Scene(Renderer& renderer);
