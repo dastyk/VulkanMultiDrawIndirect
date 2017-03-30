@@ -97,6 +97,8 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	_CreateRenderPass();
 	_CreateFramebuffer();
 
+
+
 	auto prop = VulkanHelpers::GetPhysicalDeviceProperties(_devices[0]);
 	
 	_gpuTimer = new GPUTimer(_device, 1, prop.limits.timestampPeriod);
@@ -111,11 +113,19 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	_vertexBufferHandler->CreateBuffer(data, 100, VertexType::Position);
 
 	_CreateShaders();
+
+
+
+	_CreateDescriptorStuff();
 }
 
 Renderer::~Renderer()
 {
 	vkDeviceWaitIdle(_device);
+
+
+	vkDestroyDescriptorSetLayout(_device, _descLayout, nullptr);
+	vkDestroyDescriptorPool(_device, _descPool, nullptr);
 	delete _vertexBufferHandler;
 	delete _gpuTimer;
 	vkDestroyShaderModule(_device, _vertexShader, nullptr);
@@ -968,53 +978,61 @@ void Renderer::_CreateDescriptorStuff()
 
 
 	VulkanHelpers::CreateDescriptorPool(_device, &_descPool, 0, 10, 3, _poolSizes.data());
-	
-	
-
-	///* Specify the bindings */
-	//std::vector<VkDescriptorSetLayoutBinding> bindings;
-	//for (uint32_t i = 0; i < 3; i++)
-	//{
-	//	bindings.push_back({
-	//		bindings.size(),
-	//		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-	//		1,
-	//		VK_SHADER_STAGE_VERTEX_BIT,
-	//		nullptr
-	//	});
-	//}
-	//
-	//bindings.push_back({
-	//	bindings.size(),
-	//	VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-	//	1,
-	//	VK_SHADER_STAGE_FRAGMENT_BIT,
-	//	nullptr
-	//});
-	//bindings.push_back({
-	//	bindings.size(),
-	//	VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-	//	1,
-	//	VK_SHADER_STAGE_FRAGMENT_BIT,
-	//	nullptr
-	//});
 
 
 
-	///* Create the descriptor layout. */
-	//VulkanHelpers::CreateDescriptorSetLayout(_device, &_descLayout, bindings.size(), bindings.data());
+	/* Specify the bindings */
+	std::vector<VkDescriptorSetLayoutBinding> bindings;
+	for (uint32_t i = 0; i < 3; i++)
+	{
+		bindings.push_back({
+			(uint32_t)bindings.size(),
+			VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			1,
+			VK_SHADER_STAGE_VERTEX_BIT,
+			nullptr
+		});
+	}
+
+	bindings.push_back({
+		(uint32_t)bindings.size(),
+		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+		1,
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		nullptr
+	});
+	bindings.push_back({
+		(uint32_t)bindings.size(),
+		VK_DESCRIPTOR_TYPE_SAMPLER,
+		1,
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		nullptr
+	});
 
 
 
-	///* Allocate the desciptor set*/
-	//VulkanHelpers::AllocateDescriptorSets(_device, _descPool, 1, &_descLayout, &_descSet);
-	//
+	/* Create the descriptor layout. */
+	VulkanHelpers::CreateDescriptorSetLayout(_device, &_descLayout, bindings.size(), bindings.data());
 
 
 
-	//std::vector<VkWriteDescriptorSet> WriteDS;
+	/* Allocate the desciptor set*/
+	VulkanHelpers::AllocateDescriptorSets(_device, _descPool, 1, &_descLayout, &_descSet);
 
 
-	
+
+
+	std::vector<VkWriteDescriptorSet> WriteDS;
+
+	auto& bufferInfo = _vertexBufferHandler->GetBufferInfo();
+	for (uint32_t i = 0; i < bufferInfo.size(); i++) {
+		WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, i, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &bufferInfo[i], nullptr));
+	}
+
+
+	/*Update the descriptor set with the binding data*/
+	vkUpdateDescriptorSets(_device, WriteDS.size(), WriteDS.data(), 0, nullptr);
+
+
 
 }
