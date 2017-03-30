@@ -53,6 +53,8 @@ private:
 	void _CreateFramebuffer(void);
 	void _CreateShaders(void);
 	void _CreateShader(const char* shaderCode, VkShaderModule& shader);
+	void _CreatePipelineLayout(void);
+	void _CreatePipeline(void);
 	void _CreateDescriptorStuff();
 
 
@@ -100,6 +102,8 @@ private:
 	VkFramebuffer _framebuffer = VK_NULL_HANDLE;
 	VkShaderModule _vertexShader = VK_NULL_HANDLE;
 	VkShaderModule _fragmentShader = VK_NULL_HANDLE;
+	VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
+	VkPipeline _pipeline = VK_NULL_HANDLE;
 
 	VertexBufferHandler* _vertexBufferHandler;
 
