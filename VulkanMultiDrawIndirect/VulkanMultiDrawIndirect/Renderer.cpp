@@ -139,9 +139,9 @@ Renderer::~Renderer()
 	vkDestroyImageView(_device, _offscreenImageView, nullptr);
 	for (auto& texture : _textures)
 	{
-		vkDestroyImageView(_device, (texture.second)->_imageView, nullptr);
-		vkDestroyImage(_device, (texture.second)->_image, nullptr);
-		vkFreeMemory(_device, texture.second->_memory, nullptr);
+		vkDestroyImageView(_device, texture._imageView, nullptr);
+		vkDestroyImage(_device, texture._image, nullptr);
+		vkFreeMemory(_device, texture._memory, nullptr);
 	}
 	vkFreeMemory(_device, _offscreenImageMemory, nullptr);
 	vkDestroyImage(_device, _offscreenImage, nullptr);
@@ -198,10 +198,10 @@ Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
 	return MeshHandle(meshIndex);
 }
 
-Texture2D * Renderer::CreateTexture(const char * path)
+uint32_t Renderer::CreateTexture(const char * path)
 {
-	auto find = _textures.find(std::string(path));
-	if (find != _textures.end())
+	auto find = _StringToTextureHandle.find(std::string(path));
+	if (find != _StringToTextureHandle.end())
 		return find->second;
 
 	int imageWidth, imageHeight, imageChannels;
@@ -296,10 +296,10 @@ Texture2D * Renderer::CreateTexture(const char * path)
 	vkUnmapMemory(_device, stagingMemory);
 	stbi_image_free(imagePixels);
 
-	Texture2D* texture = new Texture2D();
-	VulkanHelpers::CreateImage2D(_device, &(texture->_image), imageWidth, imageHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-	VulkanHelpers::AllocateImageMemory(_device, _devices[0], texture->_image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &(texture->_memory));
-	vkBindImageMemory(_device, texture->_image, texture->_memory, 0);
+	Texture2D texture;
+	VulkanHelpers::CreateImage2D(_device, &(texture._image), imageWidth, imageHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+	VulkanHelpers::AllocateImageMemory(_device, _devices[0], texture._image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &(texture._memory));
+	vkBindImageMemory(_device, texture._image, texture._memory, 0);
 
 	VkCommandBufferAllocateInfo cmdBufAllInf = {};
 	cmdBufAllInf.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -312,7 +312,7 @@ Texture2D * Renderer::CreateTexture(const char * path)
 	
 	VulkanHelpers::BeginCommandBuffer(oneTimeBuffer,VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	VulkanHelpers::TransitionImageLayout(_device, stagingImage, oneTimeBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-	VulkanHelpers::TransitionImageLayout(_device, texture->_image, oneTimeBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	VulkanHelpers::TransitionImageLayout(_device, texture._image, oneTimeBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_PREINITIALIZED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	VkImageSubresourceLayers srl = {};
 	srl.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -329,8 +329,8 @@ Texture2D * Renderer::CreateTexture(const char * path)
 	region.extent.height = imageHeight;
 	region.extent.depth = 1; 
 
-	vkCmdCopyImage(oneTimeBuffer, stagingImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture->_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-	VulkanHelpers::TransitionImageLayout(_device, texture->_image, oneTimeBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	vkCmdCopyImage(oneTimeBuffer, stagingImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture._image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+	VulkanHelpers::TransitionImageLayout(_device, texture._image, oneTimeBuffer, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	VulkanHelpers::EndCommandBuffer(oneTimeBuffer);
 
@@ -349,7 +349,7 @@ Texture2D * Renderer::CreateTexture(const char * path)
 
 	VkImageViewCreateInfo viewInfo = {};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.image = texture->_image;
+	viewInfo.image = texture._image;
 	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	viewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
 	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -358,10 +358,10 @@ Texture2D * Renderer::CreateTexture(const char * path)
 	viewInfo.subresourceRange.layerCount = 1;
 	viewInfo.subresourceRange.levelCount = 1;
 
-	vkCreateImageView(_device, &viewInfo, nullptr, &(texture->_imageView));
-
-	_textures[std::string(path)] = texture;
-	return texture;
+	vkCreateImageView(_device, &viewInfo, nullptr, &(texture._imageView));
+	_StringToTextureHandle[std::string(path)] = _textures.size();
+	_textures.push_back(texture);
+	return _textures.size() - 1;
 }
 
 void Renderer::UseStrategy(RenderStrategy strategy)
@@ -989,7 +989,7 @@ void Renderer::_CreateDescriptorStuff()
 {
 	/* Create the descriptor pool*/
 	std::vector<VkDescriptorPoolSize> _poolSizes = {
-		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
+		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4},
 		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1},
 		{VK_DESCRIPTOR_TYPE_SAMPLER, 1}
 	};
@@ -1001,7 +1001,7 @@ void Renderer::_CreateDescriptorStuff()
 
 	/* Specify the bindings */
 	std::vector<VkDescriptorSetLayoutBinding> bindings;
-	for (uint32_t i = 0; i < 3; i++)
+	for (uint32_t i = 0; i < 4; i++)
 	{
 		bindings.push_back({
 			(uint32_t)bindings.size(),
