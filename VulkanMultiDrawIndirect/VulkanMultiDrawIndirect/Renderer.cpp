@@ -4,6 +4,7 @@
 #include <array>
 #include <algorithm>
 #include <fstream>
+#include <Parsers.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
@@ -175,9 +176,26 @@ void Renderer::Render(void)
 	_BlitSwapchain();
 }
 
-const void Renderer::CreateMesh()
+Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
 {
-	return void();
+	ArfData::Data data;
+	ArfData::DataPointers dataPointers;
+	if (ParseObj(file.c_str(), &data, &dataPointers) != 0)
+	{
+		throw runtime_error("Failed to load mesh from file");
+	}
+
+	uint32_t positionOffset = _vertexBufferHandler->CreateBuffer(dataPointers.positions, data.NumPos, VertexType::Position);
+	uint32_t texcoordOffset = _vertexBufferHandler->CreateBuffer(dataPointers.texCoords, data.NumTex, VertexType::TexCoord);
+	uint32_t normalOffset = _vertexBufferHandler->CreateBuffer(dataPointers.normals, data.NumNorm, VertexType::Normal);
+
+	delete[] dataPointers.buffer;
+	dataPointers.buffer = nullptr;
+
+	uint32_t meshIndex = _meshes.size();
+	_meshes.push_back({ positionOffset, texcoordOffset, normalOffset, data });
+
+	return MeshHandle(meshIndex);
 }
 
 Texture2D * Renderer::CreateTexture(const char * path)
