@@ -164,6 +164,8 @@ void Renderer::Render(void)
 	// transitioning it. When it's time to blit we must synchronize to make
 	// sure that the image is finished for us to read.
 	_BlitSwapchain();
+
+	_renderMeshes.clear();
 }
 
 Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
@@ -352,6 +354,11 @@ Texture2D * Renderer::CreateTexture(const char * path)
 
 	_textures[std::string(path)] = texture;
 	return texture;
+}
+
+const void Renderer::Submit(MeshHandle mesh)
+{
+	_renderMeshes.push_back(mesh);
 }
 
 void Renderer::UseStrategy(RenderStrategy strategy)

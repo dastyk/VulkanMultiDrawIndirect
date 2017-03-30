@@ -31,7 +31,7 @@ public:
 
 	MeshHandle CreateMesh(const std::string& file);
 	Texture2D*  CreateTexture(const char* path);
-	//const void Submit(/*Mesh*/);
+	const void Submit(MeshHandle mesh);
 	//const void Unsubmit(/*Mesh*/);
 
 	void UseStrategy(RenderStrategy strategy);
@@ -76,6 +76,8 @@ private:
 	std::vector<VkImageView> _swapchainImageViews;
 
 	std::vector<std::tuple<uint32_t, uint32_t, uint32_t, ArfData::Data>> _meshes;
+	std::vector<MeshHandle> _renderMeshes; // The actual meshes to render during a frame
+
 	VkDescriptorPool _descPool;
 	VkDescriptorSetLayout _descLayout;
 	VkDescriptorSet _descSet;

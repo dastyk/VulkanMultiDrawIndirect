@@ -15,5 +15,7 @@ public:
 
 private:
 	Renderer& _renderer;
+
+	Renderer::MeshHandle _deer;
 };
 
