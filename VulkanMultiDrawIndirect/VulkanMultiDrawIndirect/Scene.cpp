@@ -13,17 +13,10 @@ Scene::~Scene()
 
 const void Scene::Init()
 {
-	Renderer::MeshHandle deer = _renderer.CreateMesh("../Assets/Meshes/deer-obj.obj");
-	Renderer::TextureHandle deert = _renderer.CreateTexture("../Assets/Textures/deer texture.tga");
-
-
 	_CreateObject("../Assets/Meshes/deer-obj.obj", "../Assets/Textures/deer texture.tga");
 
-	//renderer.CreateMesh("asdasd", "asdasd");
-	//_renderer.Submit(idididi, ididid, ididi )
-
-
-	Renderer::TextureHandle test = _renderer.CreateTexture("../Assets/Textures/testimage.png");
+	for (auto& o : _objects)
+		_renderer.Submit(o.mesh, o.texture, o.translation);
 
 }
 

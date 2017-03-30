@@ -106,13 +106,6 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 
 	_vertexBufferHandler = new VertexBufferHandler(_devices[0], _device, _queue, _cmdBuffer);
 
-	struct pos
-	{
-		float e[3];
-	};
-	pos data[100];
-	_vertexBufferHandler->CreateBuffer(data, 100, VertexType::Position);
-
 	_CreateShaders();
 
 
@@ -362,6 +355,11 @@ uint32_t Renderer::CreateTexture(const char * path)
 	_StringToTextureHandle[std::string(path)] = _textures.size();
 	_textures.push_back(texture);
 	return _textures.size() - 1;
+}
+
+const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationHandle translation)
+{
+	return void();
 }
 
 void Renderer::UseStrategy(RenderStrategy strategy)
