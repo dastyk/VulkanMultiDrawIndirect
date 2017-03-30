@@ -45,6 +45,7 @@ public:
 	float GetAspect() { return _width / _height; }
 
 private:
+	void _UpdateViewProjection();
 	void _RenderSceneTraditional(void);
 	void _BlitSwapchain(void);
 	const void _CreateSurface(HWND hwnd);
@@ -66,6 +67,8 @@ private:
 		glm::mat4x4 view = glm::mat4(); //Identity matrix as default.
 		glm::mat4x4 projection = glm::mat4();
 	};
+	void _CreatePipelineLayout(void);
+	void _CreatePipeline(void);
 	void _CreateDescriptorStuff();
 
 
@@ -92,11 +95,14 @@ private:
 
 	//std::unordered_map<std::string, Texture2D*> _textures;
 	//Buffer for the view and projection matrix.
+	VPUniformBuffer _ViewProjection;
 	VkBuffer _VPUniformBuffer;
 	VkDeviceMemory _VPUniformBufferMemory;
 	VkBuffer _VPUniformBufferStaging;//Used for updating the uniform buffer
 	VkDeviceMemory _VPUniformBufferMemoryStaging;
 	std::vector<std::tuple<uint32_t, uint32_t, uint32_t, ArfData::Data>> _meshes;
+	std::vector<MeshHandle> _renderMeshes; // The actual meshes to render during a frame
+
 	VkDescriptorPool _descPool;
 	VkDescriptorSetLayout _descLayout;
 	VkDescriptorSet _descSet;
@@ -117,6 +123,8 @@ private:
 	VkFramebuffer _framebuffer = VK_NULL_HANDLE;
 	VkShaderModule _vertexShader = VK_NULL_HANDLE;
 	VkShaderModule _fragmentShader = VK_NULL_HANDLE;
+	VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
+	VkPipeline _pipeline = VK_NULL_HANDLE;
 
 	VertexBufferHandler* _vertexBufferHandler;
 
