@@ -42,6 +42,8 @@ public:
 
 	void UseStrategy(RenderStrategy strategy);
 
+	float GetAspect() { return _width / _height; }
+
 private:
 	void _RenderSceneTraditional(void);
 	void _BlitSwapchain(void);
