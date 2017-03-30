@@ -7,4 +7,5 @@
 	* Materials
 	* Buffers
 	* Textures
+	* Sampler
 	* Pipeline
