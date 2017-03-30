@@ -8,11 +8,12 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+
 using namespace std;
 
 Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _height(height)
 {
-
+	
 	/************Create Instance*************/
 	const std::vector<const char*> validationLayers = {
 		"VK_LAYER_LUNARG_standard_validation"
@@ -369,10 +370,39 @@ const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationH
 	return void();
 }
 
+void Renderer::SetViewMatrix(const glm::mat4x4 & view)
+{
+	_ViewProjection.view = view;
+	_UpdateViewProjection();
+}
+
+void Renderer::SetProjectionMatrix(const glm::mat4x4 & projection)
+{
+	_ViewProjection.projection = projection;
+	_UpdateViewProjection();
+}
+
+void Renderer::_UpdateViewProjection()
+{
+	void* src;
+	VulkanHelpers::MapMemory(_device, _VPUniformBufferMemoryStaging, &src, sizeof(VPUniformBuffer));
+	memcpy(src, &_ViewProjection, sizeof(VPUniformBuffer));
+	vkUnmapMemory(_device, _VPUniformBufferMemoryStaging);
+
+	VulkanHelpers::BeginCommandBuffer(_cmdBuffer);
+	VulkanHelpers::CopyDataBetweenBuffers(_cmdBuffer, _VPUniformBufferStaging, 0, _VPUniformBuffer, 0, sizeof(VPUniformBuffer));
+	vkEndCommandBuffer(_cmdBuffer);
+	auto& sInfo = VulkanHelpers::MakeSubmitInfo(1, &_cmdBuffer);
+	VulkanHelpers::QueueSubmit(_queue, 1, &sInfo);
+	vkQueueWaitIdle(_queue);
+}
+
 void Renderer::UseStrategy(RenderStrategy strategy)
 {
 	_nextStrategy = strategy;
 }
+
+
 
 // Render the scene in a traditional manner, i.e. rerecord the draw calls to
 // work with a dynamic scene.
