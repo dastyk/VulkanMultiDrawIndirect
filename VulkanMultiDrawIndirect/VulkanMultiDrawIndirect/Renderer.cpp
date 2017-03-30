@@ -998,11 +998,12 @@ void Renderer::_CreateDescriptorStuff()
 	std::vector<VkDescriptorPoolSize> _poolSizes = {
 		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4},
 		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1},
-		{VK_DESCRIPTOR_TYPE_SAMPLER, 1}
+		{VK_DESCRIPTOR_TYPE_SAMPLER, 1},
+		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}
 	};
 
 
-	VulkanHelpers::CreateDescriptorPool(_device, &_descPool, 0, 10, 3, _poolSizes.data());
+	VulkanHelpers::CreateDescriptorPool(_device, &_descPool, 0, 10, _poolSizes.size(), _poolSizes.data());
 
 
 
@@ -1033,19 +1034,19 @@ void Renderer::_CreateDescriptorStuff()
 		VK_SHADER_STAGE_FRAGMENT_BIT,
 		nullptr
 	});
-
-
+	bindings.push_back({
+		(uint32_t)bindings.size(),
+		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		1,
+		VK_SHADER_STAGE_VERTEX_BIT,
+		nullptr
+	});
 
 	/* Create the descriptor layout. */
 	VulkanHelpers::CreateDescriptorSetLayout(_device, &_descLayout, bindings.size(), bindings.data());
 
-
-
 	/* Allocate the desciptor set*/
 	VulkanHelpers::AllocateDescriptorSets(_device, _descPool, 1, &_descLayout, &_descSet);
-
-
-
 
 	std::vector<VkWriteDescriptorSet> WriteDS;
 
@@ -1053,13 +1054,13 @@ void Renderer::_CreateDescriptorStuff()
 	for (uint32_t i = 0; i < bufferInfo.size(); i++) {
 		WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, i, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &bufferInfo[i], nullptr));
 	}
-
-
+	VkDescriptorBufferInfo ubdescInfo;
+	ubdescInfo.buffer = _VPUniformBuffer;
+	ubdescInfo.offset = 0;
+	ubdescInfo.range = VK_WHOLE_SIZE;
+	WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, 6, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &ubdescInfo, nullptr, nullptr));
 	/*Update the descriptor set with the binding data*/
 	vkUpdateDescriptorSets(_device, WriteDS.size(), WriteDS.data(), 0, nullptr);
-
-
-
 }
 
 void Renderer::_CreateVPUniformBuffer()

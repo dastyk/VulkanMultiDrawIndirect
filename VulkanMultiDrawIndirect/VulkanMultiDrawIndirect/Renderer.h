@@ -88,7 +88,7 @@ private:
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
 
-	std::unordered_map<std::string, Texture2D*> _textures;
+	//std::unordered_map<std::string, Texture2D*> _textures;
 	//Buffer for the view and projection matrix.
 	VkBuffer _VPUniformBuffer;
 	VkDeviceMemory _VPUniformBufferMemory;
