@@ -92,6 +92,8 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	_CreateSemaphores();
 	_CreateOffscreenImage();
 	_CreateOffscreenImageView();
+	_CreateDepthBufferImage();
+	_CreateDepthBufferImageView();
 	_CreateRenderPass();
 	_CreateFramebuffer();
 
@@ -120,6 +122,9 @@ Renderer::~Renderer()
 	vkDestroyShaderModule(_device, _fragmentShader, nullptr);
 	vkDestroyFramebuffer(_device, _framebuffer, nullptr);
 	vkDestroyRenderPass(_device, _renderPass, nullptr);
+	vkDestroyImageView(_device, _depthBufferImageView, nullptr);
+	vkDestroyImage(_device, _depthBufferImage, nullptr);
+	vkFreeMemory(_device, _depthBufferImageMemory, nullptr);
 	vkDestroyImageView(_device, _offscreenImageView, nullptr);
 	for (auto& texture : _textures)
 	{
@@ -352,8 +357,9 @@ void Renderer::_RenderSceneTraditional(void)
 
 	// Do the actual rendering
 
-	array<VkClearValue, 1> clearValues = {};
+	array<VkClearValue, 2> clearValues = {};
 	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
+	clearValues[1].depthStencil = { 0.0f, 0 };
 
 	VkRenderPassBeginInfo beginInfo = {};
 	beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -750,9 +756,72 @@ void Renderer::_CreateOffscreenImageView(void)
 	}
 }
 
+void Renderer::_CreateDepthBufferImage(void)
+{
+	VkImageCreateInfo imageInfo = {};
+	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageInfo.pNext = nullptr;
+	imageInfo.flags = 0;
+	imageInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageInfo.format = VK_FORMAT_D24_UNORM_S8_UINT;
+	imageInfo.extent = { _swapchainExtent.width, _swapchainExtent.height, 1 };
+	imageInfo.mipLevels = 1;
+	imageInfo.arrayLayers = 1;
+	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageInfo.queueFamilyIndexCount = 0;
+	imageInfo.pQueueFamilyIndices = nullptr;
+	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+	VkResult result = vkCreateImage(_device, &imageInfo, nullptr, &_depthBufferImage);
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create depth buffer!");
+	}
+
+	VkMemoryRequirements memReq;
+	vkGetImageMemoryRequirements(_device, _depthBufferImage, &memReq);
+
+	if (!_AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, memReq, _depthBufferImageMemory))
+	{
+		throw runtime_error("Failed to allocate memory for depth buffer!");
+	}
+
+	result = vkBindImageMemory(_device, _depthBufferImage, _depthBufferImageMemory, 0);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Failed to bind depth buffer to memory!");
+	}
+}
+
+void Renderer::_CreateDepthBufferImageView(void)
+{
+	VkImageViewCreateInfo viewInfo = {};
+	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	viewInfo.pNext = nullptr;
+	viewInfo.flags = 0;
+	viewInfo.image = _depthBufferImage;
+	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.format = VK_FORMAT_D24_UNORM_S8_UINT;
+	viewInfo.components = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY , VK_COMPONENT_SWIZZLE_IDENTITY };
+	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	viewInfo.subresourceRange.baseMipLevel = 0;
+	viewInfo.subresourceRange.levelCount = 1;
+	viewInfo.subresourceRange.baseArrayLayer = 0;
+	viewInfo.subresourceRange.layerCount = 1;
+
+	VkResult result = vkCreateImageView(_device, &viewInfo, nullptr, &_depthBufferImageView);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Failed to create depth buffer image view!");
+	}
+}
+
 void Renderer::_CreateRenderPass(void)
 {
-	array<VkAttachmentDescription, 1> attachments = {};
+	array<VkAttachmentDescription, 2> attachments = {};
 	attachments[0].flags = 0;
 	attachments[0].format = VK_FORMAT_R8G8B8A8_UNORM;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -763,9 +832,23 @@ void Renderer::_CreateRenderPass(void)
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[0].finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
+	attachments[1].flags = 0;
+	attachments[1].format = VK_FORMAT_D24_UNORM_S8_UINT;
+	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
 	VkAttachmentReference colorRef = {};
 	colorRef.attachment = 0;
 	colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkAttachmentReference depthRef = {};
+	depthRef.attachment = 1;
+	depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 	VkSubpassDescription subpass = {};
 	subpass.flags = 0;
@@ -775,7 +858,7 @@ void Renderer::_CreateRenderPass(void)
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &colorRef;
 	subpass.pResolveAttachments = nullptr;
-	subpass.pDepthStencilAttachment = nullptr;
+	subpass.pDepthStencilAttachment = &depthRef;
 	subpass.preserveAttachmentCount = 0;
 	subpass.pPreserveAttachments = nullptr;
 
@@ -815,7 +898,7 @@ void Renderer::_CreateRenderPass(void)
 
 void Renderer::_CreateFramebuffer(void)
 {
-	array<VkImageView, 1> attachments = { _offscreenImageView };
+	array<VkImageView, 2> attachments = { _offscreenImageView, _depthBufferImageView };
 
 	VkFramebufferCreateInfo framebufferInfo = {};
 	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
