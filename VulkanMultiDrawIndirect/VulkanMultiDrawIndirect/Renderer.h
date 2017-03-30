@@ -8,6 +8,7 @@
 #include "GPUTimer.h"
 #include "Texture2D.h"
 #include "VertexBufferHandler.h"
+#include <glm\glm.hpp>
 
 #pragma comment(lib, "vulkan-1.lib")
 
@@ -33,8 +34,11 @@ public:
 
 	MeshHandle CreateMesh(const std::string& file);
 	uint32_t  CreateTexture(const char* path);
-	const void Submit(MeshHandle mesh);
+	const void Submit(MeshHandle mesh, TextureHandle texture, TranslationHandle translation);
 	//const void Unsubmit(/*Mesh*/);
+
+	void SetViewMatrix(const glm::mat4x4& view);
+	void SetProjectionMatrix(const glm::mat4x4& projection);
 
 	void UseStrategy(RenderStrategy strategy);
 
@@ -53,6 +57,13 @@ private:
 	void _CreateFramebuffer(void);
 	void _CreateShaders(void);
 	void _CreateShader(const char* shaderCode, VkShaderModule& shader);
+	void _CreateVPUniformBuffer();
+
+	struct VPUniformBuffer
+	{
+		glm::mat4x4 view = glm::mat4(); //Identity matrix as default.
+		glm::mat4x4 projection = glm::mat4();
+	};
 	void _CreatePipelineLayout(void);
 	void _CreatePipeline(void);
 	void _CreateDescriptorStuff();
@@ -79,6 +90,12 @@ private:
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
 
+	//std::unordered_map<std::string, Texture2D*> _textures;
+	//Buffer for the view and projection matrix.
+	VkBuffer _VPUniformBuffer;
+	VkDeviceMemory _VPUniformBufferMemory;
+	VkBuffer _VPUniformBufferStaging;//Used for updating the uniform buffer
+	VkDeviceMemory _VPUniformBufferMemoryStaging;
 	std::vector<std::tuple<uint32_t, uint32_t, uint32_t, ArfData::Data>> _meshes;
 	std::vector<MeshHandle> _renderMeshes; // The actual meshes to render during a frame
 

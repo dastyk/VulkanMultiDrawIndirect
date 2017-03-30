@@ -9,6 +9,7 @@ class Scene
 		Renderer::MeshHandle mesh;
 		Renderer::TextureHandle texture;
 		Renderer::TranslationHandle translation;
+
 	};
 public:
 	Scene(Renderer& renderer);
@@ -26,8 +27,5 @@ private:
 	Renderer& _renderer;
 
 	std::vector<Object> _objects;
-
-	
-	Renderer::MeshHandle _deer;
 };
 

@@ -104,15 +104,9 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 
 	_vertexBufferHandler = new VertexBufferHandler(_devices[0], _device, _queue, _cmdBuffer);
 
-	struct pos
-	{
-		float e[3];
-	};
-	pos data[100];
-	_vertexBufferHandler->CreateBuffer(data, 100, VertexType::Position);
 
+	_CreateVPUniformBuffer();
 	_CreateDescriptorStuff();
-
 	_CreateShaders();
 	_CreatePipelineLayout();
 	_CreatePipeline();
@@ -143,6 +137,11 @@ Renderer::~Renderer()
 		vkDestroyImage(_device, texture._image, nullptr);
 		vkFreeMemory(_device, texture._memory, nullptr);
 	}
+	vkDestroyBuffer(_device, _VPUniformBuffer, nullptr);
+	vkFreeMemory(_device, _VPUniformBufferMemory, nullptr);
+	vkDestroyBuffer(_device, _VPUniformBufferStaging, nullptr);
+	vkFreeMemory(_device, _VPUniformBufferMemoryStaging, nullptr);
+
 	vkFreeMemory(_device, _offscreenImageMemory, nullptr);
 	vkDestroyImage(_device, _offscreenImage, nullptr);
 	vkDestroyCommandPool(_device, _cmdPool, nullptr);
@@ -366,7 +365,7 @@ uint32_t Renderer::CreateTexture(const char * path)
 	return _textures.size() - 1;
 }
 
-const void Renderer::Submit(MeshHandle mesh)
+const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationHandle translation)
 {
 	_renderMeshes.push_back(mesh);
 }
@@ -1159,11 +1158,12 @@ void Renderer::_CreateDescriptorStuff()
 	std::vector<VkDescriptorPoolSize> _poolSizes = {
 		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4},
 		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1},
-		{VK_DESCRIPTOR_TYPE_SAMPLER, 1}
+		{VK_DESCRIPTOR_TYPE_SAMPLER, 1},
+		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}
 	};
 
 
-	VulkanHelpers::CreateDescriptorPool(_device, &_descPool, 0, 10, 3, _poolSizes.data());
+	VulkanHelpers::CreateDescriptorPool(_device, &_descPool, 0, 10, _poolSizes.size(), _poolSizes.data());
 
 
 
@@ -1194,19 +1194,19 @@ void Renderer::_CreateDescriptorStuff()
 		VK_SHADER_STAGE_FRAGMENT_BIT,
 		nullptr
 	});
-
-
+	bindings.push_back({
+		(uint32_t)bindings.size(),
+		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		1,
+		VK_SHADER_STAGE_VERTEX_BIT,
+		nullptr
+	});
 
 	/* Create the descriptor layout. */
 	VulkanHelpers::CreateDescriptorSetLayout(_device, &_descLayout, bindings.size(), bindings.data());
 
-
-
 	/* Allocate the desciptor set*/
 	VulkanHelpers::AllocateDescriptorSets(_device, _descPool, 1, &_descLayout, &_descSet);
-
-
-
 
 	std::vector<VkWriteDescriptorSet> WriteDS;
 
@@ -1214,11 +1214,37 @@ void Renderer::_CreateDescriptorStuff()
 	for (uint32_t i = 0; i < bufferInfo.size(); i++) {
 		WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, i, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &bufferInfo[i], nullptr));
 	}
-
-
+	VkDescriptorBufferInfo ubdescInfo;
+	ubdescInfo.buffer = _VPUniformBuffer;
+	ubdescInfo.offset = 0;
+	ubdescInfo.range = VK_WHOLE_SIZE;
+	WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, 6, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &ubdescInfo, nullptr, nullptr));
 	/*Update the descriptor set with the binding data*/
 	vkUpdateDescriptorSets(_device, WriteDS.size(), WriteDS.data(), 0, nullptr);
+}
 
+void Renderer::_CreateVPUniformBuffer()
+{
+
+	VkDeviceSize size = sizeof(VPUniformBuffer);
+	VulkanHelpers::CreateBuffer(_devices[0], _device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &_VPUniformBufferStaging, &_VPUniformBufferMemoryStaging);
+	VulkanHelpers::CreateBuffer(_devices[0], _device, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &_VPUniformBuffer, &_VPUniformBufferMemory);
+
+	//Stick an identity matrix into as default
+	void* src;
+	VulkanHelpers::MapMemory(_device, _VPUniformBufferMemoryStaging, &src, sizeof(VPUniformBuffer));
+	VPUniformBuffer def; 
+	memcpy(src, &def, sizeof(VPUniformBuffer));
+	vkUnmapMemory(_device, _VPUniformBufferMemoryStaging);
+
+	VulkanHelpers::BeginCommandBuffer(_cmdBuffer);
+	VulkanHelpers::CopyDataBetweenBuffers(_cmdBuffer, _VPUniformBufferStaging, 0, _VPUniformBuffer, 0, sizeof(VPUniformBuffer));
+	vkEndCommandBuffer(_cmdBuffer);
+	auto& sInfo = VulkanHelpers::MakeSubmitInfo(1, &_cmdBuffer);
+	VulkanHelpers::QueueSubmit(_queue, 1, &sInfo);
+	vkQueueWaitIdle(_queue);
 
 
 }
+
+
