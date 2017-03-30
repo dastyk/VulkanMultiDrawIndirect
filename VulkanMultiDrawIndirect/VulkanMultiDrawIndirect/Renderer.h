@@ -15,6 +15,8 @@ class Renderer
 {
 public:
 	typedef uint32_t MeshHandle;
+	typedef uint32_t TextureHandle;
+	typedef uint32_t TranslationHandle;
 
 	enum class RenderStrategy
 	{
@@ -30,7 +32,7 @@ public:
 
 
 	MeshHandle CreateMesh(const std::string& file);
-	Texture2D*  CreateTexture(const char* path);
+	uint32_t  CreateTexture(const char* path);
 	const void Submit(MeshHandle mesh);
 	//const void Unsubmit(/*Mesh*/);
 
@@ -82,7 +84,9 @@ private:
 	VkDescriptorSetLayout _descLayout;
 	VkDescriptorSet _descSet;
 
-	std::unordered_map<std::string, Texture2D*> _textures;
+	std::unordered_map<std::string, uint32_t> _StringToTextureHandle;
+	std::vector<Texture2D> _textures;
+
 
 	VkSemaphore _imageAvailable = VK_NULL_HANDLE;
 	VkSemaphore _swapchainBlitComplete = VK_NULL_HANDLE;

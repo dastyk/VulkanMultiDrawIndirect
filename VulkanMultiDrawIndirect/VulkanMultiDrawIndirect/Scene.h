@@ -4,6 +4,12 @@
 
 class Scene
 {
+	struct Object
+	{
+		Renderer::MeshHandle mesh;
+		Renderer::TextureHandle texture;
+		Renderer::TranslationHandle translation;
+	};
 public:
 	Scene(Renderer& renderer);
 	~Scene();
@@ -14,8 +20,14 @@ public:
 	const void Shutdown();
 
 private:
+	const void _CreateObject(const char* mesh, const char* texture);
+
+private:
 	Renderer& _renderer;
 
+	std::vector<Object> _objects;
+
+	
 	Renderer::MeshHandle _deer;
 };
 

@@ -7,6 +7,7 @@ VertexBufferHandler::VertexBufferHandler(VkPhysicalDevice phydev, VkDevice devic
 	_CreateBufferSet(VertexType::Position);
 	_CreateBufferSet(VertexType::TexCoord);
 	_CreateBufferSet(VertexType::Normal);
+	_CreateBufferSet(VertexType::Translation);
 }
 
 
@@ -84,7 +85,7 @@ const void VertexBufferHandler::_CreateBufferSet(VertexType type)
 	set.maxCount = (100 MB) / byteWidth;
 	set.firstFree = 0;
 	VulkanHelpers::CreateBuffer(_phydev, _device, 100 MB,
-		VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		&set.buffer, &set.memory);
 }
