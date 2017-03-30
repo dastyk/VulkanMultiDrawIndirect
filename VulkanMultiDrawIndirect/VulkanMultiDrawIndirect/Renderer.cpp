@@ -390,6 +390,8 @@ void Renderer::_UpdateViewProjection()
 	memcpy(src, &_ViewProjection, sizeof(VPUniformBuffer));
 	vkUnmapMemory(_device, _VPUniformBufferMemoryStaging);
 
+	//TODO: Make a fence instead of waiting for idle.
+	vkQueueWaitIdle(_queue);
 	VulkanHelpers::BeginCommandBuffer(_cmdBuffer);
 	VulkanHelpers::CopyDataBetweenBuffers(_cmdBuffer, _VPUniformBufferStaging, 0, _VPUniformBuffer, 0, sizeof(VPUniformBuffer));
 	vkEndCommandBuffer(_cmdBuffer);
