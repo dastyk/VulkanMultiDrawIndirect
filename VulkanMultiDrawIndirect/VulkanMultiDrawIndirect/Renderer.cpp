@@ -405,6 +405,30 @@ void Renderer::_RenderSceneTraditional(void)
 	beginInfo.pClearValues = clearValues.data();
 	vkCmdBeginRenderPass(_cmdBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+	VkViewport viewport = {};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = _swapchainExtent.width;
+	viewport.height = _swapchainExtent.height;
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	VkRect2D scissor = {};
+	scissor.offset = { 0, 0 };
+	scissor.extent = _swapchainExtent;
+
+	vkCmdBindPipeline(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+	vkCmdSetViewport(_cmdBuffer, 0, 1, &viewport);
+	vkCmdSetScissor(_cmdBuffer, 0, 1, &scissor);
+
+	vkCmdBindDescriptorSets(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
+
+	uint32_t positionOffset = get<0>(_meshes[_renderMeshes[0]]); // We need to use these somehow
+	uint32_t texcoordOffset = get<1>(_meshes[_renderMeshes[0]]);
+	uint32_t normalOffset = get<2>(_meshes[_renderMeshes[0]]);
+	const ArfData::Data& meshData = get<3>(_meshes[_renderMeshes[0]]);
+	vkCmdDraw(_cmdBuffer, meshData.NumFace * 3, 1, 0, 0);
+
 	vkCmdEndRenderPass(_cmdBuffer);
 
 	// TODO: As of now there is no synchronization point between rendering to

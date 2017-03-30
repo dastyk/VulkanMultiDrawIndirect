@@ -8,6 +8,7 @@
 #include "GPUTimer.h"
 #include "Texture2D.h"
 #include "VertexBufferHandler.h"
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm\glm.hpp>
 
 #pragma comment(lib, "vulkan-1.lib")

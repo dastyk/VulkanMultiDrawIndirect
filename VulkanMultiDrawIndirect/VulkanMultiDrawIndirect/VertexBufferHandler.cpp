@@ -22,7 +22,7 @@ VertexBufferHandler::~VertexBufferHandler()
 
 const uint32_t VertexBufferHandler::CreateBuffer(void* data, uint32_t numElements, VertexType type)
 {
-	auto& bufferSet = _bufferSets[VertexType::Position];
+	auto& bufferSet = _bufferSets[type];
 	auto byteWidth = TypeSize(type);
 	VkDeviceSize totalSize = byteWidth*numElements;
 	if (bufferSet.firstFree + numElements > bufferSet.maxCount)
