@@ -1,6 +1,7 @@
 #pragma once
 #include "VulkanHelpers.h"
 #include <vector>
+#include <Parsers.h>
 #include <SDL.h>
 #include <SDL_syswm.h>
 #include <unordered_map>
@@ -13,6 +14,8 @@
 class Renderer
 {
 public:
+	typedef uint32_t MeshHandle;
+
 	enum class RenderStrategy
 	{
 		Traditional,
@@ -26,7 +29,7 @@ public:
 	void Render(void);
 
 
-	const void/*Mesh**/ CreateMesh(/*MeshData*/);
+	MeshHandle CreateMesh(const std::string& file);
 	Texture2D*  CreateTexture(const char* path);
 	//const void Submit(/*Mesh*/);
 	//const void Unsubmit(/*Mesh*/);
@@ -72,6 +75,7 @@ private:
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
 
+	std::vector<std::tuple<uint32_t, uint32_t, uint32_t, ArfData::Data>> _meshes;
 	VkDescriptorPool _descPool;
 	VkDescriptorSetLayout _descLayout;
 	VkDescriptorSet _descSet;

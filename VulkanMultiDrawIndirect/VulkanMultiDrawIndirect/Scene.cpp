@@ -13,7 +13,8 @@ Scene::~Scene()
 
 const void Scene::Init()
 {
-	//_renderer.CreateMesh();
+	Renderer::MeshHandle deer = _renderer.CreateMesh("../Assets/Meshes/deer-obj.obj");
+	Texture2D* deerTex = _renderer.CreateTexture("../Assets/Textures/deer texture.tga");
 	Texture2D* test = _renderer.CreateTexture("../Assets/Textures/testimage.png");
 	//renderer.CreateMesh("asdasd", "asdasd");
 	//_renderer.Submit(idididi, ididid, ididi )
