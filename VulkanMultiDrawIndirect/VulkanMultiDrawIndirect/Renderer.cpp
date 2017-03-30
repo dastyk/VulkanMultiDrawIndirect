@@ -357,8 +357,9 @@ void Renderer::_RenderSceneTraditional(void)
 
 	// Do the actual rendering
 
-	array<VkClearValue, 1> clearValues = {};
+	array<VkClearValue, 2> clearValues = {};
 	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
+	clearValues[1].depthStencil = { 0.0f, 0 };
 
 	VkRenderPassBeginInfo beginInfo = {};
 	beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -820,7 +821,7 @@ void Renderer::_CreateDepthBufferImageView(void)
 
 void Renderer::_CreateRenderPass(void)
 {
-	array<VkAttachmentDescription, 1> attachments = {};
+	array<VkAttachmentDescription, 2> attachments = {};
 	attachments[0].flags = 0;
 	attachments[0].format = VK_FORMAT_R8G8B8A8_UNORM;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -831,9 +832,23 @@ void Renderer::_CreateRenderPass(void)
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[0].finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
+	attachments[1].flags = 0;
+	attachments[1].format = VK_FORMAT_D24_UNORM_S8_UINT;
+	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
 	VkAttachmentReference colorRef = {};
 	colorRef.attachment = 0;
 	colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkAttachmentReference depthRef = {};
+	depthRef.attachment = 1;
+	depthRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 	VkSubpassDescription subpass = {};
 	subpass.flags = 0;
@@ -843,7 +858,7 @@ void Renderer::_CreateRenderPass(void)
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &colorRef;
 	subpass.pResolveAttachments = nullptr;
-	subpass.pDepthStencilAttachment = nullptr;
+	subpass.pDepthStencilAttachment = &depthRef;
 	subpass.preserveAttachmentCount = 0;
 	subpass.pPreserveAttachments = nullptr;
 
@@ -883,7 +898,7 @@ void Renderer::_CreateRenderPass(void)
 
 void Renderer::_CreateFramebuffer(void)
 {
-	array<VkImageView, 1> attachments = { _offscreenImageView };
+	array<VkImageView, 2> attachments = { _offscreenImageView, _depthBufferImageView };
 
 	VkFramebufferCreateInfo framebufferInfo = {};
 	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
