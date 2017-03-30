@@ -42,6 +42,8 @@ private:
 	bool _AllocateMemory(VkMemoryPropertyFlagBits desiredProps, const VkMemoryRequirements& memReq, VkDeviceMemory& memory);
 	void _CreateOffscreenImage(void);
 	void _CreateOffscreenImageView(void);
+	void _CreateDepthBufferImage(void);
+	void _CreateDepthBufferImageView(void);
 	void _CreateRenderPass(void);
 	void _CreateFramebuffer(void);
 	void _CreateShaders(void);
@@ -74,6 +76,9 @@ private:
 	VkImage _offscreenImage = VK_NULL_HANDLE;
 	VkDeviceMemory _offscreenImageMemory = VK_NULL_HANDLE;
 	VkImageView _offscreenImageView = VK_NULL_HANDLE;
+	VkImage _depthBufferImage = VK_NULL_HANDLE;
+	VkDeviceMemory _depthBufferImageMemory = VK_NULL_HANDLE;
+	VkImageView _depthBufferImageView = VK_NULL_HANDLE;
 	VkRenderPass _renderPass = VK_NULL_HANDLE;
 	VkFramebuffer _framebuffer = VK_NULL_HANDLE;
 	VkShaderModule _vertexShader = VK_NULL_HANDLE;
