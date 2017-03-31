@@ -27,6 +27,12 @@ layout(set = 0, binding = CONSTANTBUFFER) uniform CameraConstants {
 	mat4 g_Proj;
 };
 
+layout(push_constant) uniform VertexOffsets {
+	uint Position;
+	uint Texcoord;
+	uint Normal;
+} g_VertexOffsets;
+
 out gl_PerVertex
 {
 	vec4 gl_Position;
@@ -36,7 +42,7 @@ out gl_PerVertex
 
 void main()
 {
-	gl_Position = g_Proj * g_View * vec4(imageLoad(g_Positions, gl_VertexIndex).xyz, 1.0f);
+	gl_Position = g_Proj * g_View * vec4(imageLoad(g_Positions, int(g_VertexOffsets.Position) + gl_VertexIndex).xyz, 1.0f);
 
 	//o_TexC = g_Texcoords[gl_VertexIndex];
 }
