@@ -112,9 +112,14 @@ glm::mat4 Camera::view() const {
 	return orientation() * glm::translate(glm::mat4(), -_position);
 }
 
-const void Camera::MoveForward(float dt)
+void Camera::MoveForward(float d)
 {
-	_position += forward();
+	_position += forward() * d;
+}
+
+void Camera::MoveRight(float d)
+{
+	_position += right() * d;
 }
 
 void Camera::normalizeAngles() {
