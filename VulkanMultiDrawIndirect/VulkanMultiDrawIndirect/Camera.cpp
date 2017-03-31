@@ -103,10 +103,12 @@ glm::mat4 Camera::matrix() const {
 }
 
 glm::mat4 Camera::projection() const {
+//	return glm::mat4();
 	return glm::perspective(glm::radians(_fieldOfView), _viewportAspectRatio, _nearPlane, _farPlane);
 }
 
 glm::mat4 Camera::view() const {
+	//return glm::mat4();
 	return orientation() * glm::translate(glm::mat4(), -_position);
 }
 
