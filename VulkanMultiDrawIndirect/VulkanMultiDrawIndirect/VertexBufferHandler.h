@@ -1,6 +1,8 @@
 #pragma once
 #include "VulkanHelpers.h"
 #include <map>
+#include <tuple>
+#include <vector>
 #define TypeSize(x) (static_cast<uint16_t>(x) & 0x00ff)
 
 enum class VertexType : uint16_t
@@ -10,6 +12,14 @@ enum class VertexType : uint16_t
 	Normal = ((1U << 2U) << 8U) | 16U,
 	Translation = ((1U << 2U) << 8U) | 64U
 };
+
+static std::vector<std::tuple<VertexType, VkFormat>> Texels =
+{
+	{ VertexType::Position , VK_FORMAT_R32G32B32A32_SFLOAT },
+	{ VertexType::TexCoord , VK_FORMAT_R32G32_SFLOAT },
+	{ VertexType::Normal , VK_FORMAT_R32G32B32A32_SFLOAT }
+};
+
 class VertexBufferHandler
 {
 
