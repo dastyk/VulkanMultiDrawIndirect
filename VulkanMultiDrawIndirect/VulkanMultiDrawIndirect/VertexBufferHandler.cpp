@@ -15,7 +15,8 @@ VertexBufferHandler::~VertexBufferHandler()
 {
 	for (auto& set : _bufferSets)
 	{
-		vkDestroyBufferView(_device, set.second.view, nullptr);
+		if(set.second.view != VK_NULL_HANDLE)
+			vkDestroyBufferView(_device, set.second.view, nullptr);
 		vkDestroyBuffer(_device, set.second.buffer, nullptr);
 		vkFreeMemory(_device, set.second.memory, nullptr);
 	}
@@ -123,28 +124,26 @@ const void VertexBufferHandler::_CreateBufferSet(VertexType type)
 	auto byteWidth = TypeSize(type);
 	set.maxCount = (100 MB) / byteWidth;
 	set.firstFree = 0;
+	for (auto& t : Texels)
+	{
+		
+		if (std::get<0>(t) == type)
+		{
+			VulkanHelpers::CreateBuffer(_phydev, _device, 100 MB,
+				VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+				&set.buffer, &set.memory);
+
+			VulkanHelpers::CreateBufferView(_device, set.buffer, &set.view, std::get<1>(t));
+			return;
+		}
+
+
+	
+	}
 	VulkanHelpers::CreateBuffer(_phydev, _device, 100 MB,
-		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT,
+		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		&set.buffer, &set.memory);
-
-	auto format = VK_FORMAT_R32G32B32A32_SFLOAT;
-	switch (type)
-	{
-	case VertexType::Position:
-		format = VK_FORMAT_R32G32B32A32_SFLOAT;
-		break;
-	case VertexType::TexCoord:
-		format = VK_FORMAT_R32G32_SFLOAT;
-		break;
-	case VertexType::Normal:
-		format = VK_FORMAT_R32G32B32A32_SFLOAT;
-		break;
-	case VertexType::Translation:
-		format = VK_FORMAT_R32G32B32A32_SFLOAT;
-		break;
-	default:
-		break;
-	}
-	VulkanHelpers::CreateBufferView(_device, set.buffer, &set.view, format);
+	
 }

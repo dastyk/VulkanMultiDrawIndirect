@@ -513,12 +513,25 @@ void Renderer::_RenderSceneTraditional(void)
 
 	vkCmdBindDescriptorSets(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
 
-	uint32_t positionOffset = get<0>(_meshes[_renderMeshes[0]]); // We need to use these somehow
-	uint32_t texcoordOffset = get<1>(_meshes[_renderMeshes[0]]);
-	uint32_t normalOffset = get<2>(_meshes[_renderMeshes[0]]);
-	const ArfData::Data& meshData = get<3>(_meshes[_renderMeshes[0]]);
-	vkCmdDraw(_cmdBuffer, meshData.NumFace * 3, 1, 0, 0);
-	//vkCmdDraw(_cmdBuffer, 3, 1, 0, 0);
+	for (auto& meshHandle : _renderMeshes)
+	{
+		struct PushConstants
+		{
+			uint32_t PositionOffset;
+			uint32_t TexcoordOffset;
+			uint32_t NormalOffset;
+		} pushConstants;
+
+		pushConstants.PositionOffset = get<0>(_meshes[meshHandle]); // We need to use these somehow
+		pushConstants.TexcoordOffset = get<1>(_meshes[meshHandle]);
+		pushConstants.NormalOffset = get<2>(_meshes[meshHandle]);
+
+		vkCmdPushConstants(_cmdBuffer, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
+
+		const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
+		vkCmdDraw(_cmdBuffer, meshData.NumFace * 3, 1, 0, 0);
+	}
+
 	vkCmdEndRenderPass(_cmdBuffer);
 
 	// TODO: As of now there is no synchronization point between rendering to
@@ -1109,14 +1122,19 @@ void Renderer::_CreatePipelineLayout(void)
 {
 	array<VkDescriptorSetLayout, 1> setLayouts = { _descLayout };
 
+	VkPushConstantRange pushConstants = {};
+	pushConstants.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	pushConstants.offset = 0;
+	pushConstants.size = 3 * sizeof(uint32_t);
+
 	VkPipelineLayoutCreateInfo layoutInfo = {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	layoutInfo.pNext = nullptr;
 	layoutInfo.flags = 0;
 	layoutInfo.setLayoutCount = setLayouts.size();
 	layoutInfo.pSetLayouts = setLayouts.data();
-	layoutInfo.pushConstantRangeCount = 0;
-	layoutInfo.pPushConstantRanges = nullptr;
+	layoutInfo.pushConstantRangeCount = 1;
+	layoutInfo.pPushConstantRanges = &pushConstants;
 
 	VkResult result = vkCreatePipelineLayout(_device, &layoutInfo, nullptr, &_pipelineLayout);
 	if (result != VK_SUCCESS)
