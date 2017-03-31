@@ -20,7 +20,7 @@ public:
 	const void Init();
 	const void Frame(float dt);
 	const void Shutdown();
-
+	Camera _camera;
 private:
 	const void _CreateObject(const char* mesh, const char* texture);
 private:
@@ -29,7 +29,7 @@ private:
 	std::vector<Object> _objects;
 
 
-	Camera _camera;
+
 	
 };
 

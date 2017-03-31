@@ -1268,12 +1268,14 @@ void Renderer::_CreatePipeline(void)
 void Renderer::_CreateDescriptorStuff()
 {
 	/* Create the descriptor pool*/
-	std::vector<VkDescriptorPoolSize> _poolSizes = {
-		{VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 4},
-		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1},
-		{VK_DESCRIPTOR_TYPE_SAMPLER, 1},
-		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}
-	};
+	std::vector<VkDescriptorPoolSize> _poolSizes = _vertexBufferHandler->GetDescriptorPoolSizes();	
+	_poolSizes.push_back(
+	{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1 });
+	_poolSizes.push_back(
+	{ VK_DESCRIPTOR_TYPE_SAMPLER, 1 });
+	_poolSizes.push_back(
+	{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 });
+
 
 
 	VulkanHelpers::CreateDescriptorPool(_device, &_descPool, 0, 10, _poolSizes.size(), _poolSizes.data());
@@ -1281,21 +1283,21 @@ void Renderer::_CreateDescriptorStuff()
 
 
 	/* Specify the bindings */
-	std::vector<VkDescriptorSetLayoutBinding> bindings;
-	for (uint32_t i = 0; i < 4; i++)
-	{
-		bindings.push_back({
-			(uint32_t)bindings.size(),
-			VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
-			1,
-			VK_SHADER_STAGE_VERTEX_BIT,
-			nullptr
-		});
-	}
+	std::vector<VkDescriptorSetLayoutBinding> bindings = _vertexBufferHandler->GetDescriptorSetLayoutBindings();
+	//for (uint32_t i = 0; i < 4; i++)
+	//{
+	//	bindings.push_back({
+	//		(uint32_t)bindings.size(),
+	//		VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+	//		1,
+	//		VK_SHADER_STAGE_VERTEX_BIT,
+	//		nullptr
+	//	});
+	//}
 
 	bindings.push_back({
 		(uint32_t)bindings.size(),
-		VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
 		1,
 		VK_SHADER_STAGE_FRAGMENT_BIT,
 		nullptr
@@ -1323,10 +1325,8 @@ void Renderer::_CreateDescriptorStuff()
 
 	std::vector<VkWriteDescriptorSet> WriteDS;
 
-	auto& bufferViews = _vertexBufferHandler->GetBufferInfo();
-	for (uint32_t i = 0; i < bufferViews.size(); i++) {
-		WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, i, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, nullptr, nullptr, &bufferViews[i]));
-	}
+	_vertexBufferHandler->WriteDescriptorSets(_descSet);
+	
 	VkDescriptorBufferInfo ubdescInfo;
 	ubdescInfo.buffer = _VPUniformBuffer;
 	ubdescInfo.offset = 0;
