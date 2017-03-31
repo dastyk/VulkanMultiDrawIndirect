@@ -124,27 +124,28 @@ const void VertexBufferHandler::_CreateBufferSet(VertexType type)
 	set.maxCount = (100 MB) / byteWidth;
 	set.firstFree = 0;
 	VulkanHelpers::CreateBuffer(_phydev, _device, 100 MB,
-		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT,
+		VK_BUFFER_USAGE_TRANSFER_DST_BIT | set.view == VK_NULL_HANDLE ? VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		&set.buffer, &set.memory);
-
-	auto format = VK_FORMAT_R32G32B32A32_SFLOAT;
-	switch (type)
+	if (set.view == VK_NULL_HANDLE)
 	{
-	case VertexType::Position:
-		format = VK_FORMAT_R32G32B32A32_SFLOAT;
-		break;
-	case VertexType::TexCoord:
-		format = VK_FORMAT_R32G32_SFLOAT;
-		break;
-	case VertexType::Normal:
-		format = VK_FORMAT_R32G32B32A32_SFLOAT;
-		break;
-	case VertexType::Translation:
-		format = VK_FORMAT_R32G32B32A32_SFLOAT;
-		break;
-	default:
-		break;
+		auto format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		switch (type)
+		{
+		case VertexType::Position:
+			format = VK_FORMAT_R32G32B32A32_SFLOAT;
+			break;
+		case VertexType::TexCoord:
+			format = VK_FORMAT_R32G32_SFLOAT;
+			break;
+		case VertexType::Normal:
+			format = VK_FORMAT_R32G32B32A32_SFLOAT;
+			break;
+		default:
+			break;
+		}
+		VulkanHelpers::CreateBufferView(_device, set.buffer, &set.view, format);
 	}
-	VulkanHelpers::CreateBufferView(_device, set.buffer, &set.view, format);
+	
+	
 }

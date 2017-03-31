@@ -87,7 +87,6 @@ int main(int argc, char** argv)
 		//Vulkan needs "wndClass.hInstance" and "hwnd"
 
 		Renderer renderer(hwnd, SCRWIDTH, SCRHEIGHT);
-
 		DebugUtils::DebugConsole::Command_Structure renderStrategyCmd =
 		{
 			&renderer,
@@ -110,7 +109,10 @@ int main(int argc, char** argv)
 					printf("  --indirect-resubmit\tRender objects using indirect draw calls where the\n\t\t\tcommand buffer is recorded once and reused.\n");
 				}
 			},
-			[](void* userData, int argc, char** argv) {},
+			[](void* userData, int argc, char** argv) {printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
+			printf("  --traditional\t\tRecord regular draw calls into the command buffer each\n\t\t\tframe.\n");
+			printf("  --indirect-record\tRender objects using indirect draw calls where the\n\t\t\tcommand buffer is recorded each frame.\n");
+			printf("  --indirect-resubmit\tRender objects using indirect draw calls where the\n\t\t\tcommand buffer is recorded once and reused.\n");},
 			"strategy",
 			"Sets the rendering strategy."
 		};
@@ -136,16 +138,16 @@ int main(int argc, char** argv)
 				switch (ev.key.keysym.sym)
 				{
 				case SDLK_w:
-					scene._camera.MoveForward(dt * 100.0f);
+					scene._camera.MoveForward(dt * 10000.0f);
 					break;
 				case SDLK_s:
-					scene._camera.MoveForward(dt * -100.0f);
+					scene._camera.MoveForward(dt * -10000.0f);
 					break;
 				case SDLK_a:
-					scene._camera.MoveRight(dt * -100.0f);
+					scene._camera.MoveRight(dt * -10000.0f);
 					break;
 				case SDLK_d:
-					scene._camera.MoveRight(dt * 100.0f);
+					scene._camera.MoveRight(dt * 10000.0f);
 					break;
 				case SDLK_ESCAPE:
 					quit = true;
