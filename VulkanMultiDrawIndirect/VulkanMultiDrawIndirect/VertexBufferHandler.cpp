@@ -62,22 +62,59 @@ const uint32_t VertexBufferHandler::CreateBuffer(void* data, uint32_t numElement
 
 }
 
-std::vector<VkBufferView> VertexBufferHandler::GetBufferInfo()
+std::vector<VkDescriptorPoolSize> VertexBufferHandler::GetDescriptorPoolSizes()
 {
-	std::vector<VkBufferView> descBuffInfo;
+	std::vector<VkDescriptorPoolSize> p;
+	uint32_t total = 0;
 
 	for (auto& set : _bufferSets)
-	{
-	/*	auto& buff = set.second;
-		descBuffInfo.push_back({
-			buff.buffer,
-			0,
-			VK_WHOLE_SIZE
-		});*/
-		descBuffInfo.push_back(set.second.view);
-	}
+		total = set.second.view == VK_NULL_HANDLE ? total : total + 1;
+	p.push_back({ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, total });
+	p.push_back({ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (uint32_t)_bufferSets.size() - total });
+	return p;
+}
 
-	return descBuffInfo;
+std::vector<VkDescriptorSetLayoutBinding> VertexBufferHandler::GetDescriptorSetLayoutBindings()
+{
+	std::vector<VkDescriptorSetLayoutBinding> b;
+	for (auto& set : _bufferSets)
+	{
+		b.push_back({
+			(uint32_t)b.size(),
+			set.second.view == VK_NULL_HANDLE ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+			1,
+			VK_SHADER_STAGE_VERTEX_BIT,
+			nullptr
+		});
+	}
+	
+	return b;
+}
+
+void VertexBufferHandler::WriteDescriptorSets(VkDescriptorSet descSet)
+{
+	std::vector<VkWriteDescriptorSet> s;
+	std::vector<VkDescriptorBufferInfo> dinfo;
+	dinfo.reserve(_bufferSets.size() * 2);
+	uint32_t i = 0;
+	for (auto& set : _bufferSets)
+	{
+		if (set.second.view == VK_NULL_HANDLE)
+		{
+			dinfo.push_back({
+				set.second.buffer,
+				0,
+				VK_WHOLE_SIZE
+			});
+			s.push_back(VulkanHelpers::MakeWriteDescriptorSet(descSet, i, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &dinfo[dinfo.size() - 1], nullptr));
+		}
+		else
+		{
+			s.push_back(VulkanHelpers::MakeWriteDescriptorSet(descSet, i, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, nullptr, nullptr, &set.second.view));
+		}
+		i++;
+	}
+	vkUpdateDescriptorSets(_device, s.size(), s.data(), 0, nullptr);
 }
 
 const void VertexBufferHandler::_CreateBufferSet(VertexType type)
