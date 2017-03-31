@@ -43,7 +43,7 @@ public:
 
 	void UseStrategy(RenderStrategy strategy);
 
-	float GetAspect() { return _width / _height; }
+	float GetAspect() { return (float)_width / _height; }
 
 private:
 	void _UpdateViewProjection();
