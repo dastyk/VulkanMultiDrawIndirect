@@ -185,11 +185,53 @@ Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
 		throw runtime_error("Failed to load mesh from file");
 	}
 
-	uint32_t positionOffset = _vertexBufferHandler->CreateBuffer(dataPointers.positions, data.NumPos, VertexType::Position);
-	uint32_t texcoordOffset = _vertexBufferHandler->CreateBuffer(dataPointers.texCoords, data.NumTex, VertexType::TexCoord);
-	uint32_t normalOffset = _vertexBufferHandler->CreateBuffer(dataPointers.normals, data.NumNorm, VertexType::Normal);
+	uint32_t bufferCount = data.NumFace * 3;
+	size_t index = 0;
+	auto posBuffer = new ArfData::Position[bufferCount];
+	auto texBuffer = new ArfData::TexCoord[bufferCount];
+	auto normBuffer = new ArfData::Normal[bufferCount];
+	for (uint8_t subM = 0; subM < data.NumSubMesh; subM++)
+	{
+		auto& subMesh = dataPointers.subMesh[subM];
+		for (auto f = subMesh.faceStart; f < subMesh.faceCount + subMesh.faceStart; f++)
+		{
+			auto& face = dataPointers.faces[f];
+			for (uint8_t fi = 0; fi < face.indexCount; fi++)
+			{
+				auto& faceIndex = face.indices[fi];
+				if (faceIndex.index[POSITION_INDEX] != INDEX_NULL)
+				{
+					memcpy(&posBuffer[index], &dataPointers.positions[faceIndex.index[POSITION_INDEX]], sizeof(ArfData::Position));
+				}
+				if (faceIndex.index[TEXCOORD_INDEX] != INDEX_NULL)
+				{
+					memcpy(&texBuffer[index], &dataPointers.texCoords[faceIndex.index[TEXCOORD_INDEX]], sizeof(ArfData::TexCoord));
+				}
+				if (faceIndex.index[NORMAL_INDEX] != INDEX_NULL)
+				{
+					memcpy(&normBuffer[index], &dataPointers.normals[faceIndex.index[NORMAL_INDEX]], sizeof(ArfData::Normal));
+				}
+				index++;			
+			}
+		}
+	}
+
+
+
+
+
+
+
+
+
+	uint32_t positionOffset = _vertexBufferHandler->CreateBuffer(posBuffer, bufferCount, VertexType::Position);
+	uint32_t texcoordOffset = _vertexBufferHandler->CreateBuffer(texBuffer, bufferCount, VertexType::TexCoord);
+	uint32_t normalOffset = _vertexBufferHandler->CreateBuffer(normBuffer, bufferCount, VertexType::Normal);
 
 	delete[] dataPointers.buffer;
+	delete[] posBuffer;
+	delete[] texBuffer;
+	delete[] normBuffer;
 	dataPointers.buffer = nullptr;
 
 	uint32_t meshIndex = _meshes.size();
