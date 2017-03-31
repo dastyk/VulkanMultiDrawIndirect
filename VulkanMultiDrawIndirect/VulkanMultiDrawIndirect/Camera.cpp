@@ -7,7 +7,7 @@
 static const float MaxVerticalAngle = 85.0f; //must be less than 90 to avoid gimbal lock
 
 Camera::Camera() :
-	_position(0.0f, 0.0f, 1.0f),
+	_position(0.0f, 0.0f, 50.0f),
 	_horizontalAngle(0.0f),
 	_verticalAngle(0.0f),
 	_fieldOfView(90.0f),

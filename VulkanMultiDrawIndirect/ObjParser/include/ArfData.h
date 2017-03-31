@@ -11,10 +11,16 @@ typedef nullptr NULL;
 
 namespace ArfData
 {
+#define POSITION_INDEX 0
+#define TEXCOORD_INDEX 1
+#define NORMAL_INDEX 2
+#define INDEX_NULL UINT32_MAX
 #define SUBMESH_NAME_MAX_LENGHT 20
 	struct Position
 	{
 		float x, y, z;
+		Position() : x(0.0f), y(0.0f), z(0.0f)
+		{}
 		Position(float x, float y, float z) : x(x), y(y), z(z)
 		{}
 	};
@@ -22,6 +28,8 @@ namespace ArfData
 	struct TexCoord
 	{
 		float u, v;
+		TexCoord() : u(0.0f), v(0.0f)
+		{}
 		TexCoord(float u, float v) : u(u), v(v)
 		{}
 	};
@@ -29,6 +37,8 @@ namespace ArfData
 	struct Normal
 	{
 		float x, y, z;
+		Normal() : x(0.0f), y(0.0f), z(0.0f)
+		{}
 		Normal(float x, float y, float z) : x(x), y(y), z(z)
 		{}
 	};
