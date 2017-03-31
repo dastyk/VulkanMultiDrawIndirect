@@ -11,9 +11,9 @@
 
 using namespace std;
 
-Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _height(height)
+Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height)
 {
-	
+
 	/************Create Instance*************/
 	const std::vector<const char*> validationLayers = {
 		"VK_LAYER_LUNARG_standard_validation"
@@ -36,7 +36,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 		extensions.data()
 	);
 	VulkanHelpers::CreateInstance(&vkInstCreateInfo, &_instance);
-	
+
 	/*Create debug callback*/
 	VkDebugReportCallbackCreateInfoEXT createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
@@ -46,7 +46,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	if (VulkanHelpers::CreateDebugReportCallbackEXT(_instance, &createInfo, nullptr, &_debugCallback) != VK_SUCCESS) {
 		throw std::runtime_error("failed to set up debug callback!");
 	}
-	
+
 	/***********Enumerate physical devices*************/
 	_devices = VulkanHelpers::EnumeratePhysicalDevices(_instance);
 	if (_devices.size() == 0)
@@ -56,8 +56,8 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	/***************Make sure the device has a queue that can handle rendering*****************/
 	auto queueFamInfo = VulkanHelpers::EnumeratePhysicalDeviceQueueFamilyProperties(_instance);
 	size_t queueIndex = -1;
-	
-	for (uint32_t i = 0; i <  queueFamInfo[0].size(); i++)
+
+	for (uint32_t i = 0; i < queueFamInfo[0].size(); i++)
 	{
 		if (queueFamInfo[0][i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
 		{
@@ -100,7 +100,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	_CreateFramebuffer();
 
 	auto prop = VulkanHelpers::GetPhysicalDeviceProperties(_devices[0]);
-	
+
 	_gpuTimer = new GPUTimer(_device, 1, prop.limits.timestampPeriod);
 
 	_vertexBufferHandler = new VertexBufferHandler(_devices[0], _device, _queue, _cmdBuffer);
@@ -111,6 +111,23 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height):_width(width), _h
 	_CreateShaders();
 	_CreatePipelineLayout();
 	_CreatePipeline();
+
+
+/*
+
+	struct P
+	{
+		float x, y, z, w;
+	};
+
+	P triangle[] = {
+		{-0.5f, 0.5f, 0.0f, 1.0f},
+		{0.0f, -0.5f, 0.0f, 1.0f },
+		{0.5f, 0.5f, 0.0f, 1.0f }
+	};
+
+
+	_vertexBufferHandler->CreateBuffer(triangle, 3, VertexType::Position);*/
 }
 
 Renderer::~Renderer()
@@ -187,9 +204,13 @@ Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
 
 	uint32_t bufferCount = data.NumFace * 3;
 	size_t index = 0;
-	auto posBuffer = new ArfData::Position[bufferCount];
+	struct P
+	{
+		float x, y, z, w;
+	};
+	auto posBuffer = new P[bufferCount];
 	auto texBuffer = new ArfData::TexCoord[bufferCount];
-	auto normBuffer = new ArfData::Normal[bufferCount];
+	auto normBuffer = new P[bufferCount];
 	for (uint8_t subM = 0; subM < data.NumSubMesh; subM++)
 	{
 		auto& subMesh = dataPointers.subMesh[subM];
@@ -202,6 +223,7 @@ Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
 				if (faceIndex.index[POSITION_INDEX] != INDEX_NULL)
 				{
 					memcpy(&posBuffer[index], &dataPointers.positions[faceIndex.index[POSITION_INDEX]], sizeof(ArfData::Position));
+					posBuffer[index].w = 1.0f;
 				}
 				if (faceIndex.index[TEXCOORD_INDEX] != INDEX_NULL)
 				{
@@ -210,17 +232,12 @@ Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
 				if (faceIndex.index[NORMAL_INDEX] != INDEX_NULL)
 				{
 					memcpy(&normBuffer[index], &dataPointers.normals[faceIndex.index[NORMAL_INDEX]], sizeof(ArfData::Normal));
+					normBuffer[index].w = 0.0f;
 				}
 				index++;			
 			}
 		}
 	}
-
-
-
-
-
-
 
 
 
@@ -500,7 +517,7 @@ void Renderer::_RenderSceneTraditional(void)
 	uint32_t normalOffset = get<2>(_meshes[_renderMeshes[0]]);
 	const ArfData::Data& meshData = get<3>(_meshes[_renderMeshes[0]]);
 	vkCmdDraw(_cmdBuffer, meshData.NumFace * 3, 1, 0, 0);
-
+	//vkCmdDraw(_cmdBuffer, 3, 1, 0, 0);
 	vkCmdEndRenderPass(_cmdBuffer);
 
 	// TODO: As of now there is no synchronization point between rendering to
@@ -1252,7 +1269,7 @@ void Renderer::_CreateDescriptorStuff()
 {
 	/* Create the descriptor pool*/
 	std::vector<VkDescriptorPoolSize> _poolSizes = {
-		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4},
+		{VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 4},
 		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1},
 		{VK_DESCRIPTOR_TYPE_SAMPLER, 1},
 		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}
@@ -1269,7 +1286,7 @@ void Renderer::_CreateDescriptorStuff()
 	{
 		bindings.push_back({
 			(uint32_t)bindings.size(),
-			VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
 			1,
 			VK_SHADER_STAGE_VERTEX_BIT,
 			nullptr
@@ -1278,7 +1295,7 @@ void Renderer::_CreateDescriptorStuff()
 
 	bindings.push_back({
 		(uint32_t)bindings.size(),
-		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+		VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
 		1,
 		VK_SHADER_STAGE_FRAGMENT_BIT,
 		nullptr
@@ -1306,9 +1323,9 @@ void Renderer::_CreateDescriptorStuff()
 
 	std::vector<VkWriteDescriptorSet> WriteDS;
 
-	auto& bufferInfo = _vertexBufferHandler->GetBufferInfo();
-	for (uint32_t i = 0; i < bufferInfo.size(); i++) {
-		WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, i, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &bufferInfo[i], nullptr));
+	auto& bufferViews = _vertexBufferHandler->GetBufferInfo();
+	for (uint32_t i = 0; i < bufferViews.size(); i++) {
+		WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, i, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, nullptr, nullptr, &bufferViews[i]));
 	}
 	VkDescriptorBufferInfo ubdescInfo;
 	ubdescInfo.buffer = _VPUniformBuffer;
