@@ -33,7 +33,10 @@ public:
 	*  - return value is the offset in the memory*/
 	const uint32_t CreateBuffer(void* data, uint32_t numElements, VertexType type);
 
-	std::vector<VkBufferView> GetBufferInfo();
+	std::vector<VkDescriptorPoolSize> GetDescriptorPoolSizes();
+	std::vector<VkDescriptorSetLayoutBinding> GetDescriptorSetLayoutBindings();
+	void WriteDescriptorSets(VkDescriptorSet descSet);
+
 
 private:
 	const void _CreateBufferSet(VertexType type);
