@@ -107,6 +107,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 
 
 	_CreateVPUniformBuffer();
+	_CreateSampler();
 	_CreateDescriptorStuff();
 	_CreateShaders();
 	_CreatePipelineLayout();
@@ -159,7 +160,7 @@ Renderer::~Renderer()
 	vkFreeMemory(_device, _VPUniformBufferMemory, nullptr);
 	vkDestroyBuffer(_device, _VPUniformBufferStaging, nullptr);
 	vkFreeMemory(_device, _VPUniformBufferMemoryStaging, nullptr);
-
+	vkDestroySampler(_device, _sampler, nullptr);
 	vkFreeMemory(_device, _offscreenImageMemory, nullptr);
 	vkDestroyImage(_device, _offscreenImage, nullptr);
 	vkDestroyCommandPool(_device, _cmdPool, nullptr);
@@ -1331,7 +1332,17 @@ void Renderer::_CreateDescriptorStuff()
 	ubdescInfo.buffer = _VPUniformBuffer;
 	ubdescInfo.offset = 0;
 	ubdescInfo.range = VK_WHOLE_SIZE;
-	WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, 6, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &ubdescInfo, nullptr, nullptr));
+	WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, 6, 0, 1,
+		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		nullptr, &ubdescInfo, nullptr, nullptr));
+	
+	VkDescriptorImageInfo dii;
+	dii.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	dii.imageView = VK_NULL_HANDLE;
+	dii.sampler = _sampler;
+	WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, 5, 0, 1,
+		VK_DESCRIPTOR_TYPE_SAMPLER,
+		&dii, nullptr, nullptr));
 	/*Update the descriptor set with the binding data*/
 	vkUpdateDescriptorSets(_device, WriteDS.size(), WriteDS.data(), 0, nullptr);
 }
@@ -1357,6 +1368,29 @@ void Renderer::_CreateVPUniformBuffer()
 	VulkanHelpers::QueueSubmit(_queue, 1, &sInfo);
 	vkQueueWaitIdle(_queue);
 
+
+}
+
+void Renderer::_CreateSampler()
+{
+	VkSamplerCreateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	info.pNext = nullptr;
+	info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	info.anisotropyEnable = VK_TRUE;
+	info.maxAnisotropy = 16;
+	info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+	info.compareEnable = VK_FALSE;
+	info.compareOp = VK_COMPARE_OP_ALWAYS;
+	info.flags = 0;
+	info.maxLod = 0;
+	info.minLod = 0;
+	info.unnormalizedCoordinates = VK_FALSE;
+	info.mipLodBias = 0;
+
+	vkCreateSampler(_device, &info, nullptr, &_sampler);
 
 }
 

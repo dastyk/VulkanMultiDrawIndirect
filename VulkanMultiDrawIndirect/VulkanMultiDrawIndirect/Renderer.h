@@ -62,6 +62,7 @@ private:
 	void _CreateShaders(void);
 	void _CreateShader(const char* shaderCode, VkShaderModule& shader);
 	void _CreateVPUniformBuffer();
+	void _CreateSampler();
 
 	struct VPUniformBuffer
 	{
@@ -91,6 +92,7 @@ private:
 	VkFormat _swapchainFormat;
 	VkExtent2D _swapchainExtent;
 	VkSwapchainKHR _swapchain;
+	VkSampler _sampler;
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
 
