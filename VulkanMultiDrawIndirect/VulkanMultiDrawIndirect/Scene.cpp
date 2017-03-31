@@ -1,5 +1,6 @@
 #include "Scene.h"
 
+#include <SDL.h>
 
 Scene::Scene(Renderer& renderer) : _renderer(renderer)
 {
@@ -30,7 +31,6 @@ const void Scene::Init()
 const void Scene::Frame(float dt)
 {
 	_renderer.SetViewMatrix(_camera.view());
-	
 	_renderer.Render();
 }
 

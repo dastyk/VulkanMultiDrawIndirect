@@ -127,18 +127,38 @@ int main(int argc, char** argv)
 		do
 		{
 			timer.Tick();
-			SDL_Event event = {};
-			while (SDL_PollEvent(&event))
+			float dt = timer.DeltaTime();
+
+			//This will have to do until we have a proper input system
+			SDL_Event ev = {};
+			while (SDL_PollEvent(&ev))
 			{
-				if (event.key.keysym.sym == SDLK_ESCAPE)
+				switch (ev.key.keysym.sym)
+				{
+				case SDLK_w:
+					scene._camera.MoveForward(dt * 100.0f);
+					break;
+				case SDLK_s:
+					scene._camera.MoveForward(dt * -100.0f);
+					break;
+				case SDLK_a:
+					scene._camera.MoveRight(dt * -100.0f);
+					break;
+				case SDLK_d:
+					scene._camera.MoveRight(dt * 100.0f);
+					break;
+				case SDLK_ESCAPE:
+					quit = true;
+					break;
+				default:
+					break;
+				}
+
+				if (ev.type == SDL_QUIT)
 				{
 					quit = true;
 				}
 
-				if (event.type == SDL_QUIT)
-				{
-					quit = true;
-				}
 			}
 
 			scene.Frame(timer.DeltaTime());
