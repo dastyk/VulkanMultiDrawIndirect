@@ -8,54 +8,30 @@ class Camera {
 public:
 	Camera();
 
-	/**
-	The position of the camera.
-	*/
-	const glm::vec3& position() const;
 	void setPosition(const glm::vec3& position);
 	void offsetPosition(const glm::vec3& offset);
-
 	float fieldOfView() const;
 	void setFieldOfView(float fieldOfView);
-
 	float nearPlane() const;
-
 	float farPlane() const;
-
-
 	void setNearAndFarPlanes(float nearPlane, float farPlane);
 
-	glm::mat4 orientation() const;
-
-
+	
 	void offsetOrientation(float upAngle, float rightAngle);
-
-
 	void lookAt(glm::vec3 position);
-
-
 	float viewportAspectRatio() const;
 	void setViewportAspectRatio(float viewportAspectRatio);
 
+	const glm::vec3& position() const;
+	glm::mat4 orientation() const;
 	glm::vec3 forward() const;
-
 	glm::vec3 right() const;
-
 	glm::vec3 up() const;
-
-	/**
-	The combined camera transformation matrix, including perspective projection.
-	This is the complete matrix to use in the vertex shader.
-	*/
 	glm::mat4 matrix() const;
-
 	glm::mat4 projection() const;
-
-
 	glm::mat4 view() const;
 
-
-	const void MoveForward(float d);
+	void MoveForward(float d);
 	void MoveRight(float d);
 
 

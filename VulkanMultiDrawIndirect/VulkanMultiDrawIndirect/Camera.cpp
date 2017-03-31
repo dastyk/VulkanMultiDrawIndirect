@@ -110,7 +110,7 @@ glm::mat4 Camera::view() const {
 	return orientation() * glm::translate(glm::mat4(), -_position);
 }
 
-const void Camera::MoveForward(float d)
+void Camera::MoveForward(float d)
 {
 	_position += forward() * d;
 }
