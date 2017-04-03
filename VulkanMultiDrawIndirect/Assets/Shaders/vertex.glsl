@@ -1,12 +1,14 @@
 #version 450
 
-#define POSITION 0
-#define TEXCOORD 1
-#define NORMAL 2
-#define TRANSLATION 3
-#define TEXTURE 4
-#define SAMPLER 5
-#define CONSTANTBUFFER 6
+#define TEXTURE 0
+#define SAMPLER 1
+#define CONSTANTBUFFER 2
+#define POSITION 3
+#define TEXCOORD 4
+#define NORMAL 5
+#define TRANSLATION 6
+
+
 
 layout(set = 0, binding = POSITION, rgba32f) uniform imageBuffer g_Positions;
 

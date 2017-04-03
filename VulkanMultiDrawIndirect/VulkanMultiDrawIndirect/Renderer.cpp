@@ -1299,14 +1299,15 @@ void Renderer::_CreatePipeline(void)
 void Renderer::_CreateDescriptorStuff()
 {
 	/* Create the descriptor pool*/
-	std::vector<VkDescriptorPoolSize> _poolSizes = _vertexBufferHandler->GetDescriptorPoolSizes();	
+	std::vector<VkDescriptorPoolSize> _poolSizes;
 	_poolSizes.push_back(
 	{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1 });
 	_poolSizes.push_back(
 	{ VK_DESCRIPTOR_TYPE_SAMPLER, 1 });
 	_poolSizes.push_back(
 	{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 });
-
+	auto& dps = _vertexBufferHandler->GetDescriptorPoolSizes();
+	_poolSizes.insert(_poolSizes.end(), dps.begin(), dps.end());
 
 
 	VulkanHelpers::CreateDescriptorPool(_device, &_descPool, 0, 10, _poolSizes.size(), _poolSizes.data());
@@ -1314,18 +1315,7 @@ void Renderer::_CreateDescriptorStuff()
 
 
 	/* Specify the bindings */
-	std::vector<VkDescriptorSetLayoutBinding> bindings = _vertexBufferHandler->GetDescriptorSetLayoutBindings();
-	//for (uint32_t i = 0; i < 4; i++)
-	//{
-	//	bindings.push_back({
-	//		(uint32_t)bindings.size(),
-	//		VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
-	//		1,
-	//		VK_SHADER_STAGE_VERTEX_BIT,
-	//		nullptr
-	//	});
-	//}
-
+	std::vector<VkDescriptorSetLayoutBinding> bindings;
 	bindings.push_back({
 		(uint32_t)bindings.size(),
 		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -1347,6 +1337,9 @@ void Renderer::_CreateDescriptorStuff()
 		VK_SHADER_STAGE_VERTEX_BIT,
 		nullptr
 	});
+	auto& dslb = _vertexBufferHandler->GetDescriptorSetLayoutBindings(3);
+	bindings.insert(bindings.end(), dslb.begin(), dslb.end());
+
 
 	/* Create the descriptor layout. */
 	VulkanHelpers::CreateDescriptorSetLayout(_device, &_descLayout, bindings.size(), bindings.data());
@@ -1356,21 +1349,21 @@ void Renderer::_CreateDescriptorStuff()
 
 	std::vector<VkWriteDescriptorSet> WriteDS;
 
-	_vertexBufferHandler->WriteDescriptorSets(_descSet);
+	_vertexBufferHandler->WriteDescriptorSets(_descSet, 3);
 	
 	VkDescriptorBufferInfo ubdescInfo;
 	ubdescInfo.buffer = _VPUniformBuffer;
 	ubdescInfo.offset = 0;
 	ubdescInfo.range = VK_WHOLE_SIZE;
-	WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, 6, 0, 1,
+	WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet,2, 0, 1,
 		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		nullptr, &ubdescInfo, nullptr, nullptr));
+		nullptr, &ubdescInfo, nullptr));
 	
 	VkDescriptorImageInfo dii;
 	dii.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	dii.imageView = VK_NULL_HANDLE;
 	dii.sampler = _sampler;
-	WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, 5, 0, 1,
+	WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, 1, 0, 1,
 		VK_DESCRIPTOR_TYPE_SAMPLER,
 		&dii, nullptr, nullptr));
 	/*Update the descriptor set with the binding data*/
