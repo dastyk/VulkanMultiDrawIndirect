@@ -1,12 +1,14 @@
 #version 450
 
-#define POSITION 0
-#define TEXCOORD 1
-#define NORMAL 2
-#define TRANSLATION 3
-#define TEXTURE 4
-#define SAMPLER 5
-#define CONSTANTBUFFER 6
+#define TEXTURE 0
+#define SAMPLER 1
+#define CONSTANTBUFFER 2
+#define POSITION 3
+#define TEXCOORD 4
+#define NORMAL 5
+#define TRANSLATION 6
+
+
 
 layout(set = 0, binding = POSITION, rgba32f) uniform imageBuffer g_Positions;
 layout(set = 0, binding = TEXCOORD, rgba32f) uniform imageBuffer g_Texcoords;
@@ -19,9 +21,9 @@ layout(set = 0, binding = TEXCOORD, rgba32f) uniform imageBuffer g_Texcoords;
 //	vec3 g_Normals[];
 //};
 //
-//layout(set = 0, binding = TRANSLATION) buffer Translations {
-//	mat4 g_Translations[];
-//};
+layout(set = 0, binding = TRANSLATION) buffer Translations {
+	mat4 g_Translations[];
+};
 
 layout(set = 0, binding = CONSTANTBUFFER) uniform CameraConstants {
 	mat4 g_View;
@@ -32,6 +34,7 @@ layout(push_constant) uniform VertexOffsets {
 	uint Position;
 	uint Texcoord;
 	uint Normal;
+	uint Translation;
 } g_VertexOffsets;
 
 out gl_PerVertex
@@ -43,6 +46,9 @@ layout(location = 0) out vec2 o_TexC;
 
 void main()
 {
-	gl_Position = g_Proj * g_View * vec4(imageLoad(g_Positions, int(g_VertexOffsets.Position) + gl_VertexIndex).xyz, 1.0f);
+	mat4 world = g_Translations[g_VertexOffsets.Translation];
+	gl_Position = g_Proj * g_View * world * vec4(imageLoad(g_Positions, int(g_VertexOffsets.Position) + gl_VertexIndex).xyz, 1.0f);
+
+	
 	o_TexC = vec2(imageLoad(g_Texcoords, int(g_VertexOffsets.Texcoord) + gl_VertexIndex).xy);
 }

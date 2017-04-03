@@ -4,10 +4,11 @@
 
 VertexBufferHandler::VertexBufferHandler(VkPhysicalDevice phydev, VkDevice device, VkQueue queue, VkCommandBuffer cmdBuffer) : _phydev(phydev), _device(device), _queue(queue), _cmdBuffer(cmdBuffer)
 {
-	_CreateBufferSet(VertexType::Position);
-	_CreateBufferSet(VertexType::TexCoord);
-	_CreateBufferSet(VertexType::Normal);
-	_CreateBufferSet(VertexType::Translation);
+	_CreateBufferSet(VertexType::Position, 1000000);
+	_CreateBufferSet(VertexType::TexCoord, 1000000);
+	_CreateBufferSet(VertexType::Normal, 1000000);
+	_CreateBufferSet(VertexType::Translation, 10000);
+	_CreateBufferSet(VertexType::IndirectBuffer, 10000);
 }
 
 
@@ -75,29 +76,30 @@ std::vector<VkDescriptorPoolSize> VertexBufferHandler::GetDescriptorPoolSizes()
 	return p;
 }
 
-std::vector<VkDescriptorSetLayoutBinding> VertexBufferHandler::GetDescriptorSetLayoutBindings()
+std::vector<VkDescriptorSetLayoutBinding> VertexBufferHandler::GetDescriptorSetLayoutBindings(uint32_t bindingOffset)
 {
 	std::vector<VkDescriptorSetLayoutBinding> b;
 	for (auto& set : _bufferSets)
 	{
 		b.push_back({
-			(uint32_t)b.size(),
+			bindingOffset,
 			set.second.view == VK_NULL_HANDLE ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
 			1,
 			VK_SHADER_STAGE_VERTEX_BIT,
 			nullptr
 		});
+		bindingOffset++;
 	}
 	
 	return b;
 }
 
-void VertexBufferHandler::WriteDescriptorSets(VkDescriptorSet descSet)
+void VertexBufferHandler::WriteDescriptorSets(VkDescriptorSet descSet, uint32_t bindingOffset)
 {
 	std::vector<VkWriteDescriptorSet> s;
 	std::vector<VkDescriptorBufferInfo> dinfo;
 	dinfo.reserve(_bufferSets.size() * 2);
-	uint32_t i = 0;
+
 	for (auto& set : _bufferSets)
 	{
 		if (set.second.view == VK_NULL_HANDLE)
@@ -107,29 +109,31 @@ void VertexBufferHandler::WriteDescriptorSets(VkDescriptorSet descSet)
 				0,
 				VK_WHOLE_SIZE
 			});
-			s.push_back(VulkanHelpers::MakeWriteDescriptorSet(descSet, i, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &dinfo[dinfo.size() - 1], nullptr));
+			s.push_back(VulkanHelpers::MakeWriteDescriptorSet(descSet, bindingOffset, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &dinfo[dinfo.size() - 1], nullptr));
 		}
 		else
 		{
-			s.push_back(VulkanHelpers::MakeWriteDescriptorSet(descSet, i, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, nullptr, nullptr, &set.second.view));
+			s.push_back(VulkanHelpers::MakeWriteDescriptorSet(descSet, bindingOffset, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, nullptr, nullptr, &set.second.view));
 		}
-		i++;
+		bindingOffset++;
 	}
 	vkUpdateDescriptorSets(_device, s.size(), s.data(), 0, nullptr);
 }
 
-const void VertexBufferHandler::_CreateBufferSet(VertexType type)
+const void VertexBufferHandler::_CreateBufferSet(VertexType type, uint32_t maxElements)
 {
 	auto& set = _bufferSets[type];
 	auto byteWidth = TypeSize(type);
-	set.maxCount = (100 MB) / byteWidth;
+	auto size = byteWidth * maxElements;
+	set.maxCount = maxElements;
 	set.firstFree = 0;
+	auto test= 100 MB;
 	for (auto& t : Texels)
 	{
 		
 		if (std::get<0>(t) == type)
 		{
-			VulkanHelpers::CreateBuffer(_phydev, _device, 100 MB,
+			VulkanHelpers::CreateBuffer(_phydev, _device, size,
 				VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT,
 				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 				&set.buffer, &set.memory);
@@ -141,7 +145,7 @@ const void VertexBufferHandler::_CreateBufferSet(VertexType type)
 
 	
 	}
-	VulkanHelpers::CreateBuffer(_phydev, _device, 100 MB,
+	VulkanHelpers::CreateBuffer(_phydev, _device, size,
 		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		&set.buffer, &set.memory);
