@@ -534,13 +534,10 @@ void Renderer::_RenderSceneTraditional(void)
 			uint32_t Translation;
 		} pushConstants;
 
-		MeshHandle meshHandle = get<0>(mesh);
 		pushConstants.PositionOffset = get<0>(_meshes[meshHandle]); // We need to use these somehow
 		pushConstants.TexcoordOffset = get<1>(_meshes[meshHandle]);
 		pushConstants.NormalOffset = get<2>(_meshes[meshHandle]);
-
-		TranslationHandle translationHandle = get<2>(mesh);
-		pushConstants.Translation = translationHandle;
+		pushConstants.Translation = translation;
 
 		vkCmdPushConstants(_cmdBuffer, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
 
