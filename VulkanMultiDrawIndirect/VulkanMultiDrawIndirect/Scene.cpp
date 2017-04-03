@@ -22,7 +22,7 @@ const void Scene::Init()
 	_CreateObject("../Assets/Meshes/deer-obj.obj", "../Assets/Textures/deer texture.tga");
 	//_CreateObject("../Assets/Meshes/bear-obj.obj", "../Assets/Textures/bear.tga");
 	//_CreateObject("../Assets/Meshes/boar-obj.obj", "../Assets/Textures/boar.tga");
-	_CreateObject("../Assets/Meshes/wolf-obj.obj", "../Assets/Textures/wolf texture.tga");
+	_CreateObject("../Assets/Meshes/bear-obj.obj", "../Assets/Textures/wolf texture.tga");
 
 	for (auto& o : _objects)
 		_renderer.Submit(o.mesh, o.texture, o.translation);
