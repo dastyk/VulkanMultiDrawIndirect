@@ -73,7 +73,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 	/*************Create the device**************/
 	float queuePriority = 1.0f;
 	auto queueInfo = VulkanHelpers::MakeDeviceQueueCreateInfo(queueIndex, 1, &queuePriority);
-	vector<const char*> deviceExtensions = { "VK_KHR_swapchain" };
+	vector<const char*> deviceExtensions = { "VK_KHR_swapchain", "VK_KHR_shader_draw_parameters" };
 	auto lInfo = VulkanHelpers::MakeDeviceCreateInfo(1, &queueInfo, 0, nullptr, nullptr, nullptr, deviceExtensions.size(), deviceExtensions.data());
 	VulkanHelpers::CreateLogicDevice(_devices[0], &lInfo, &_device);
 
@@ -534,6 +534,7 @@ void Renderer::_RenderSceneTraditional(void)
 
 	vkCmdBindDescriptorSets(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
 
+	uint32_t firstInstance = 0;
 	for (auto& mesh : _renderMeshes)
 	{
 		auto& meshHandle = get<0>(mesh);
@@ -549,7 +550,9 @@ void Renderer::_RenderSceneTraditional(void)
 		vkCmdPushConstants(_cmdBuffer, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
 
 		const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
-		vkCmdDraw(_cmdBuffer, meshData.NumFace * 3, 1, 0, 0);
+		vkCmdDraw(_cmdBuffer, meshData.NumFace * 3, 1, 0, firstInstance);
+
+		firstInstance++;
 	}
 
 	vkCmdEndRenderPass(_cmdBuffer);

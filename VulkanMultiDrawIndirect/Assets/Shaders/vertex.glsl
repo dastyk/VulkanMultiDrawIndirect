@@ -1,4 +1,6 @@
 #version 450
+//#extension SPV_KHR_shader_draw_parameters : require
+#extension GL_ARB_shader_draw_parameters : require
 
 #define TEXTURE 0
 #define SAMPLER 1
@@ -7,7 +9,8 @@
 #define TEXCOORD 4
 #define NORMAL 5
 #define TRANSLATION 6
-
+//#define INDIRECTBUFFER 7
+#define INDEX 8
 
 
 layout(set = 0, binding = POSITION, rgba32f) uniform imageBuffer g_Positions;
@@ -29,6 +32,17 @@ layout(set = 0, binding = CONSTANTBUFFER) uniform CameraConstants {
 	mat4 g_Proj;
 };
 
+struct IndexStruct {
+	uint Position;
+	uint Texcoord;
+	uint Normal;
+	uint Translation;
+};
+
+layout(set = 0, binding = INDEX) buffer Index {
+	IndexStruct g_Indices[];
+};
+
 layout(push_constant) uniform VertexOffsets {
 	uint Position;
 	uint Texcoord;
@@ -45,6 +59,7 @@ out gl_PerVertex
 
 void main()
 {
+	int hej = gl_BaseInstanceARB;
 	mat4 world = g_Translations[g_VertexOffsets.Translation];
 	gl_Position = g_Proj * g_View * world * vec4(imageLoad(g_Positions, int(g_VertexOffsets.Position) + gl_VertexIndex).xyz, 1.0f);
 
