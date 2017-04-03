@@ -426,7 +426,7 @@ uint32_t Renderer::CreateTexture(const char * path)
 
 const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationHandle translation)
 {
-	_renderMeshes.push_back(mesh);
+	_renderMeshes.push_back({ mesh, texture, translation });
 }
 
 void Renderer::SetViewMatrix(const glm::mat4x4 & view)
@@ -513,8 +513,12 @@ void Renderer::_RenderSceneTraditional(void)
 
 	vkCmdBindDescriptorSets(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
 
-	for (auto& meshHandle : _renderMeshes)
+	for (auto& mesh : _renderMeshes)
 	{
+		auto& meshHandle = get<0>(mesh);
+		auto& textureHandle = get<1>(mesh);
+		auto& translation = get<2>(mesh);
+
 		struct PushConstants
 		{
 			uint32_t PositionOffset;

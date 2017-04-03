@@ -104,7 +104,7 @@ private:
 	VkBuffer _VPUniformBufferStaging;//Used for updating the uniform buffer
 	VkDeviceMemory _VPUniformBufferMemoryStaging;
 	std::vector<std::tuple<uint32_t, uint32_t, uint32_t, ArfData::Data>> _meshes;
-	std::vector<MeshHandle> _renderMeshes; // The actual meshes to render during a frame
+	std::vector<std::tuple<MeshHandle, TextureHandle, TranslationHandle>> _renderMeshes; // The actual meshes to render during a frame
 
 	VkDescriptorPool _descPool;
 	VkDescriptorSetLayout _descLayout;
