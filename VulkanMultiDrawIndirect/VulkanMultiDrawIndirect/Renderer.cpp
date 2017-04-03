@@ -424,9 +424,16 @@ uint32_t Renderer::CreateTexture(const char * path)
 	return _textures.size() - 1;
 }
 
+Renderer::TranslationHandle Renderer::CreateTranslation(const glm::vec3 & translation)
+{
+	 uint32_t translationHandle = _vertexBufferHandler->CreateBuffer((void*)(&translation), 1, VertexType::Translation);
+
+	return translationHandle;
+}
+
 const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationHandle translation)
 {
-	_renderMeshes.push_back(mesh);
+	_renderMeshes.push_back({ mesh, texture, translation });
 }
 
 void Renderer::SetViewMatrix(const glm::mat4x4 & view)
@@ -513,18 +520,23 @@ void Renderer::_RenderSceneTraditional(void)
 
 	vkCmdBindDescriptorSets(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
 
-	for (auto& meshHandle : _renderMeshes)
+	for (auto& mesh : _renderMeshes)
 	{
 		struct PushConstants
 		{
 			uint32_t PositionOffset;
 			uint32_t TexcoordOffset;
 			uint32_t NormalOffset;
+			uint32_t Translation;
 		} pushConstants;
 
+		MeshHandle meshHandle = get<0>(mesh);
 		pushConstants.PositionOffset = get<0>(_meshes[meshHandle]); // We need to use these somehow
 		pushConstants.TexcoordOffset = get<1>(_meshes[meshHandle]);
 		pushConstants.NormalOffset = get<2>(_meshes[meshHandle]);
+
+		TranslationHandle translationHandle = get<2>(mesh);
+		pushConstants.Translation = translationHandle;
 
 		vkCmdPushConstants(_cmdBuffer, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
 
@@ -1125,7 +1137,7 @@ void Renderer::_CreatePipelineLayout(void)
 	VkPushConstantRange pushConstants = {};
 	pushConstants.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 	pushConstants.offset = 0;
-	pushConstants.size = 3 * sizeof(uint32_t);
+	pushConstants.size = 4 * sizeof(uint32_t);
 
 	VkPipelineLayoutCreateInfo layoutInfo = {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;

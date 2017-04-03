@@ -10,6 +10,7 @@
 #include "VertexBufferHandler.h"
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm\glm.hpp>
+#include <glm\gtc\matrix_transform.hpp>
 
 #pragma comment(lib, "vulkan-1.lib")
 
@@ -35,6 +36,7 @@ public:
 
 	MeshHandle CreateMesh(const std::string& file);
 	uint32_t  CreateTexture(const char* path);
+	TranslationHandle CreateTranslation(const glm::vec3& translation);
 	const void Submit(MeshHandle mesh, TextureHandle texture, TranslationHandle translation);
 	//const void Unsubmit(/*Mesh*/);
 
@@ -104,7 +106,7 @@ private:
 	VkBuffer _VPUniformBufferStaging;//Used for updating the uniform buffer
 	VkDeviceMemory _VPUniformBufferMemoryStaging;
 	std::vector<std::tuple<uint32_t, uint32_t, uint32_t, ArfData::Data>> _meshes;
-	std::vector<MeshHandle> _renderMeshes; // The actual meshes to render during a frame
+	std::vector<std::tuple<MeshHandle, TextureHandle, TranslationHandle>> _renderMeshes; // The actual meshes to render during a frame
 
 	VkDescriptorPool _descPool;
 	VkDescriptorSetLayout _descLayout;
@@ -112,7 +114,6 @@ private:
 
 	std::unordered_map<std::string, uint32_t> _StringToTextureHandle;
 	std::vector<Texture2D> _textures;
-
 
 	VkSemaphore _imageAvailable = VK_NULL_HANDLE;
 	VkSemaphore _swapchainBlitComplete = VK_NULL_HANDLE;

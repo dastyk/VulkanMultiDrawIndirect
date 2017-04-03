@@ -22,7 +22,7 @@ public:
 	const void Shutdown();
 	Camera _camera;
 private:
-	const void _CreateObject(const char* mesh, const char* texture);
+	const void _CreateObject(const char* mesh, const char* texture, const glm::vec3& translation);
 private:
 	Renderer& _renderer;
 
