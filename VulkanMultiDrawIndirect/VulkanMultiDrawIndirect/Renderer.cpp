@@ -522,6 +522,10 @@ void Renderer::_RenderSceneTraditional(void)
 
 	for (auto& mesh : _renderMeshes)
 	{
+		auto& meshHandle = get<0>(mesh);
+		auto& textureHandle = get<1>(mesh);
+		auto& translation = get<2>(mesh);
+
 		struct PushConstants
 		{
 			uint32_t PositionOffset;
