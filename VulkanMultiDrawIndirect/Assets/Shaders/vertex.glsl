@@ -20,9 +20,9 @@ layout(set = 0, binding = POSITION, rgba32f) uniform imageBuffer g_Positions;
 //	vec3 g_Normals[];
 //};
 //
-//layout(set = 0, binding = TRANSLATION) buffer Translations {
-//	mat4 g_Translations[];
-//};
+layout(set = 0, binding = TRANSLATION) buffer Translations {
+	mat4 g_Translations[];
+};
 
 layout(set = 0, binding = CONSTANTBUFFER) uniform CameraConstants {
 	mat4 g_View;
@@ -33,6 +33,7 @@ layout(push_constant) uniform VertexOffsets {
 	uint Position;
 	uint Texcoord;
 	uint Normal;
+	uint Translation;
 } g_VertexOffsets;
 
 out gl_PerVertex
@@ -44,7 +45,8 @@ out gl_PerVertex
 
 void main()
 {
-	gl_Position = g_Proj * g_View * vec4(imageLoad(g_Positions, int(g_VertexOffsets.Position) + gl_VertexIndex).xyz, 1.0f);
+	mat4 world = g_Translations[g_VertexOffsets.Translation];
+	gl_Position = g_Proj * g_View * world * vec4(imageLoad(g_Positions, int(g_VertexOffsets.Position) + gl_VertexIndex).xyz, 1.0f);
 
 	//o_TexC = g_Texcoords[gl_VertexIndex];
 }

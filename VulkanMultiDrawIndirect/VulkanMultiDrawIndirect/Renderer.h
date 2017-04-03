@@ -45,7 +45,7 @@ public:
 
 	MeshHandle CreateMesh(const std::string& file);
 	uint32_t  CreateTexture(const char* path);
-	TranslationHandle CreateTranslation(const glm::vec3& translation);
+	TranslationHandle CreateTranslation(const glm::mat4& translation);
 	const void Submit(MeshHandle mesh, TextureHandle texture, TranslationHandle translation);
 	//const void Unsubmit(/*Mesh*/);
 

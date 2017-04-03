@@ -424,9 +424,10 @@ uint32_t Renderer::CreateTexture(const char * path)
 	return _textures.size() - 1;
 }
 
-Renderer::TranslationHandle Renderer::CreateTranslation(const glm::vec3 & translation)
+Renderer::TranslationHandle Renderer::CreateTranslation(const glm::mat4 & translation)
 {
-	 uint32_t translationHandle = _vertexBufferHandler->CreateBuffer((void*)(&translation), 1, VertexType::Translation);
+	uint32_t translationHandle = _vertexBufferHandler->CreateBuffer((void*)(&translation), 1, VertexType::Translation);
+
 	return translationHandle;
 }
 
@@ -1144,7 +1145,7 @@ void Renderer::_CreatePipelineLayout(void)
 	VkPushConstantRange pushConstants = {};
 	pushConstants.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 	pushConstants.offset = 0;
-	pushConstants.size = 4 * sizeof(uint32_t);
+	pushConstants.size = 3 * sizeof(uint32_t) + 1 * sizeof(glm::mat4);
 
 	VkPipelineLayoutCreateInfo layoutInfo = {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
