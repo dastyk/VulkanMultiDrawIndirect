@@ -14,6 +14,7 @@
 
 
 layout(set = 0, binding = POSITION, rgba32f) uniform imageBuffer g_Positions;
+layout(set = 0, binding = TEXCOORD, rg32f) uniform imageBuffer g_Texcoords;
 
 //layout(set = 0, binding = TEXCOORD) buffer Texcoords {
 //	vec2 g_Texcoords[];
@@ -55,7 +56,7 @@ out gl_PerVertex
 	vec4 gl_Position;
 };
 
-//layout(location = 0) out vec2 o_TexC;
+layout(location = 0) out vec2 o_TexC;
 
 void main()
 {
@@ -63,5 +64,6 @@ void main()
 	mat4 world = g_Translations[g_VertexOffsets.Translation];
 	gl_Position = g_Proj * g_View * world * vec4(imageLoad(g_Positions, int(g_VertexOffsets.Position) + gl_VertexIndex).xyz, 1.0f);
 
-	//o_TexC = g_Texcoords[gl_VertexIndex];
+	
+	o_TexC = vec2(imageLoad(g_Texcoords, int(g_VertexOffsets.Texcoord) + gl_VertexIndex).xy);
 }
