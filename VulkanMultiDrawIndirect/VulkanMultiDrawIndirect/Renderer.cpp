@@ -1361,6 +1361,8 @@ void Renderer::_CreateDescriptorStuff()
 	WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, 5, 0, 1,
 		VK_DESCRIPTOR_TYPE_SAMPLER,
 		&dii, nullptr, nullptr));
+
+
 	/*Update the descriptor set with the binding data*/
 	vkUpdateDescriptorSets(_device, WriteDS.size(), WriteDS.data(), 0, nullptr);
 }
