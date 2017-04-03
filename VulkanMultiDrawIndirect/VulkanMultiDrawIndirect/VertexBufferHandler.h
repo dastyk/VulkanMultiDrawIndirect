@@ -10,7 +10,8 @@ enum class VertexType : uint16_t
 	Position = ((1U << 0U) << 8U) | 16U,
 	TexCoord = ((1U << 1U) << 8U) | 8U,
 	Normal = ((1U << 2U) << 8U) | 16U,
-	Translation = ((1U << 2U) << 8U) | 64U
+	Translation = ((1U << 3U) << 8U) | 64U,
+	IndirectBuffer = ((1U << 4U) << 8U) | 16U
 };
 
 static std::vector<std::tuple<VertexType, VkFormat>> Texels =
@@ -38,18 +39,16 @@ public:
 	~VertexBufferHandler();
 
 	/* Creates a vertex buffer
-	*  - bytewidth is ex. sizeof(float)*3 if data is a list of positions
-	*  - numElements is the number of positions
 	*  - return value is the offset in the memory*/
 	const uint32_t CreateBuffer(void* data, uint32_t numElements, VertexType type);
 
 	std::vector<VkDescriptorPoolSize> GetDescriptorPoolSizes();
-	std::vector<VkDescriptorSetLayoutBinding> GetDescriptorSetLayoutBindings();
-	void WriteDescriptorSets(VkDescriptorSet descSet);
+	std::vector<VkDescriptorSetLayoutBinding> GetDescriptorSetLayoutBindings(uint32_t bindingOffset);
+	void WriteDescriptorSets(VkDescriptorSet descSet, uint32_t bindingOffset);
 
 
 private:
-	const void _CreateBufferSet(VertexType type);
+	const void _CreateBufferSet(VertexType type, uint32_t maxElements);
 private:
 	std::map<VertexType, BufferSet>_bufferSets;
 
