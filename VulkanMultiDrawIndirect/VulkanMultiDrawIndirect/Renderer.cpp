@@ -441,7 +441,7 @@ const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationH
 	pushConstants.NormalOffset = get<2>(_meshes[mesh]);
 	pushConstants.Translation = translation;
 
-	_vertexBufferHandler->CreateBuffer(&pushConstants, 4, VertexType::PushConstant);
+	_vertexBufferHandler->CreateBuffer(&pushConstants, 4, VertexType::Index);
 
 
 	VkDrawIndexedIndirectCommand s;
