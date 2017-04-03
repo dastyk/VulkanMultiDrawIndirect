@@ -150,16 +150,16 @@ int main(int argc, char** argv)
 					scene._camera.MoveRight(dt * 10000.0f);
 					break;
 				case SDLK_RIGHT:
-					scene._camera.offsetOrientation(0.0f, 200.0f * dt);
+					scene._camera.offsetOrientation(0.0f, 800.0f * dt);
 					break;
 				case SDLK_LEFT:
-					scene._camera.offsetOrientation(0.0f, -200.0f * dt);
+					scene._camera.offsetOrientation(0.0f, -800.0f * dt);
 					break;
 				case SDLK_UP:
-					scene._camera.offsetOrientation(-200.0f * dt, 0.0f);
+					scene._camera.offsetOrientation(-800.0f * dt, 0.0f);
 					break;
 				case SDLK_DOWN:
-					scene._camera.offsetOrientation(200.0f * dt, 0.0f);
+					scene._camera.offsetOrientation(800.0f * dt, 0.0f);
 					break;
 				case SDLK_ESCAPE:
 					quit = true;

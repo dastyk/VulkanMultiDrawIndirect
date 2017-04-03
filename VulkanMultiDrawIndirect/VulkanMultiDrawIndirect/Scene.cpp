@@ -24,7 +24,7 @@ const void Scene::Init()
 	_CreateObject("../Assets/Meshes/deer-obj.obj", "../Assets/Textures/deer texture.tga", glm::translate(glm::mat4(), glm::vec3(-20, 0, 0)));
 	//_CreateObject("../Assets/Meshes/bear-obj.obj", "../Assets/Textures/bear.tga");
 	//_CreateObject("../Assets/Meshes/boar-obj.obj", "../Assets/Textures/boar.tga");
-	_CreateObject("../Assets/Meshes/wolf-obj.obj", "../Assets/Textures/wolf texture.tga", glm::mat4());
+	_CreateObject("../Assets/Meshes/cube2.obj", "../Assets/Textures/cube2.png", glm::mat4());
 
 	for (auto& o : _objects)
 		_renderer.Submit(o.mesh, o.texture, o.translation);

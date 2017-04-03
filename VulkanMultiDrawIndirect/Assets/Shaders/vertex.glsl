@@ -11,7 +11,7 @@
 
 
 layout(set = 0, binding = POSITION, rgba32f) uniform imageBuffer g_Positions;
-layout(set = 0, binding = TEXCOORD, rgba32f) uniform imageBuffer g_Texcoords;
+layout(set = 0, binding = TEXCOORD, rg32f) uniform imageBuffer g_Texcoords;
 
 //layout(set = 0, binding = TEXCOORD) buffer Texcoords {
 //	vec2 g_Texcoords[];

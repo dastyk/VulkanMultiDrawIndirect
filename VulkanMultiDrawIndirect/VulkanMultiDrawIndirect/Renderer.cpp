@@ -74,7 +74,9 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 	float queuePriority = 1.0f;
 	auto queueInfo = VulkanHelpers::MakeDeviceQueueCreateInfo(queueIndex, 1, &queuePriority);
 	vector<const char*> deviceExtensions = { "VK_KHR_swapchain" };
-	auto lInfo = VulkanHelpers::MakeDeviceCreateInfo(1, &queueInfo, 0, nullptr, nullptr, nullptr, deviceExtensions.size(), deviceExtensions.data());
+	VkPhysicalDeviceFeatures vpdf = {};
+	vpdf.shaderStorageImageExtendedFormats = VK_TRUE;
+	auto lInfo = VulkanHelpers::MakeDeviceCreateInfo(1, &queueInfo, 0, nullptr, &vpdf, nullptr, deviceExtensions.size(), deviceExtensions.data());
 	VulkanHelpers::CreateLogicDevice(_devices[0], &lInfo, &_device);
 
 	// Get the queue
@@ -421,6 +423,17 @@ uint32_t Renderer::CreateTexture(const char * path)
 	vkCreateImageView(_device, &viewInfo, nullptr, &(texture._imageView));
 	_StringToTextureHandle[std::string(path)] = _textures.size();
 	_textures.push_back(texture);
+
+
+	VkDescriptorImageInfo vkdii;
+	vkdii.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	vkdii.imageView = _textures.back()._imageView;
+	vkdii.sampler = VK_NULL_HANDLE;
+
+	auto wds = VulkanHelpers::MakeWriteDescriptorSet(_descSet, 0, 0, 1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, &vkdii, nullptr, nullptr);
+
+	vkUpdateDescriptorSets(_device, 1, &wds, 0, nullptr);
+
 	return _textures.size() - 1;
 }
 
@@ -540,7 +553,7 @@ void Renderer::_RenderSceneTraditional(void)
 		pushConstants.Translation = translation;
 
 		vkCmdPushConstants(_cmdBuffer, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
-
+		
 		const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
 		vkCmdDraw(_cmdBuffer, meshData.NumFace * 3, 1, 0, 0);
 	}
@@ -1208,7 +1221,7 @@ void Renderer::_CreatePipeline(void)
 	rasterizationState.rasterizerDiscardEnable = VK_FALSE;
 	rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
-	rasterizationState.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	rasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterizationState.depthBiasEnable = VK_FALSE;
 	rasterizationState.depthBiasConstantFactor = 0.0f;
 	rasterizationState.depthBiasClamp = 0.0f;
@@ -1368,6 +1381,8 @@ void Renderer::_CreateDescriptorStuff()
 		VK_DESCRIPTOR_TYPE_SAMPLER,
 		&dii, nullptr, nullptr));
 
+	
+	
 
 	/*Update the descriptor set with the binding data*/
 	vkUpdateDescriptorSets(_device, WriteDS.size(), WriteDS.data(), 0, nullptr);
