@@ -447,6 +447,19 @@ Renderer::TranslationHandle Renderer::CreateTranslation(const glm::mat4 & transl
 const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationHandle translation)
 {
 	_renderMeshes.push_back({ mesh, texture, translation });
+
+	PushConstants pushConstants;
+	pushConstants.PositionOffset = get<0>(_meshes[mesh]); // We need to use these somehow
+	pushConstants.TexcoordOffset = get<1>(_meshes[mesh]);
+	pushConstants.NormalOffset = get<2>(_meshes[mesh]);
+	pushConstants.Translation = translation;
+
+	_vertexBufferHandler->CreateBuffer(&pushConstants, 4, VertexType::Index);
+
+
+	VkDrawIndexedIndirectCommand s = {};
+	s.indexCount = get<3>(_meshes[mesh]).NumFace * 3;
+	_vertexBufferHandler->CreateBuffer(&s, 1, VertexType::IndirectBuffer);
 }
 
 void Renderer::SetViewMatrix(const glm::mat4x4 & view)
@@ -539,14 +552,7 @@ void Renderer::_RenderSceneTraditional(void)
 		auto& textureHandle = get<1>(mesh);
 		auto& translation = get<2>(mesh);
 
-		struct PushConstants
-		{
-			uint32_t PositionOffset;
-			uint32_t TexcoordOffset;
-			uint32_t NormalOffset;
-			uint32_t Translation;
-		} pushConstants;
-
+		PushConstants pushConstants;
 		pushConstants.PositionOffset = get<0>(_meshes[meshHandle]); // We need to use these somehow
 		pushConstants.TexcoordOffset = get<1>(_meshes[meshHandle]);
 		pushConstants.NormalOffset = get<2>(_meshes[meshHandle]);

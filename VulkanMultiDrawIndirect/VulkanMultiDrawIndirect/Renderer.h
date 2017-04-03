@@ -16,6 +16,15 @@
 
 class Renderer
 {
+	struct PushConstants
+	{
+		uint32_t PositionOffset;
+		uint32_t TexcoordOffset;
+		uint32_t NormalOffset;
+		uint32_t Translation;
+	};
+
+
 public:
 	typedef uint32_t MeshHandle;
 	typedef uint32_t TextureHandle;
