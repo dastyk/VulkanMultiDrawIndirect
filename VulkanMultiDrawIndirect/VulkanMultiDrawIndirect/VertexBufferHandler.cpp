@@ -7,8 +7,8 @@ VertexBufferHandler::VertexBufferHandler(VkPhysicalDevice phydev, VkDevice devic
 	_CreateBufferSet(VertexType::Position, 1000000);
 	_CreateBufferSet(VertexType::TexCoord, 1000000);
 	_CreateBufferSet(VertexType::Normal, 1000000);
-	_CreateBufferSet(VertexType::Translation, 10000);
-	_CreateBufferSet(VertexType::IndirectBuffer, 10000);
+	_CreateBufferSet(VertexType::Translation, 50000);
+	_CreateBufferSet(VertexType::IndirectBuffer, 50000);
 	_CreateBufferSet(VertexType::Index, 50000);
 }
 
