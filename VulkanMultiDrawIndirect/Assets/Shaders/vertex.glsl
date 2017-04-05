@@ -52,6 +52,7 @@ out gl_PerVertex
 };
 
 layout(location = 0) out vec2 o_TexC;
+layout(location = 1) out uint o_TextureID;
 
 void main()
 {
@@ -61,4 +62,5 @@ void main()
 
 	
 	o_TexC = vec2(imageLoad(g_Texcoords, int(indices.Texcoord) + gl_VertexIndex).xy);
+	o_TextureID = INDIRECT_RENDERING == 1 ? gl_DrawIDARB : gl_BaseInstanceARB;
 }

@@ -5,7 +5,7 @@
 * Traditional rendering
 	* Add constant buffers and sampler and textures to descriptor set.
 	* Materials
-	* Constant Buffer for camera matricies and stuff
+	* Constant Buffer for camera matricies and stuff DONE
 	* Add support for updating translation buffer in vertexbufferhandler
-	* Sampler
+	* Sampler DONE
 	* Pipeline
