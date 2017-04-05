@@ -57,8 +57,19 @@ public:
 	float GetAspect() { return (float)_width / _height; }
 
 private:
+	typedef void(Renderer::*RenderStrategyFP)();
+
 	void _UpdateViewProjection();
+
+	RenderStrategyFP _currentRenderStrategy;
+
+
+
 	void _RenderSceneTraditional(void);
+	void _RenderIndirectRecorded(void);
+	void _RenderIndirect(void);
+
+
 	void _BlitSwapchain(void);
 	const void _CreateSurface(HWND hwnd);
 	const void _CreateSwapChain();
@@ -143,5 +154,5 @@ private:
 	VertexBufferHandler* _vertexBufferHandler;
 
 	RenderStrategy _strategy = RenderStrategy::Traditional;
-	RenderStrategy _nextStrategy = RenderStrategy::Traditional;
+
 };

@@ -11,7 +11,7 @@
 
 using namespace std;
 
-Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height)
+Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderSceneTraditional)
 {
 
 	/************Create Instance*************/
@@ -184,12 +184,11 @@ void Renderer::Render(void)
 {
 	vkQueueWaitIdle(_queue);
 
-	_strategy = _nextStrategy;
-
 	//printf("GPU Time: %f\n", _gpuTimer->GetTime(0));
 
 	// Begin rendering stuff while we potentially wait for swapchain image
-	_RenderSceneTraditional();
+
+	(*this.*_currentRenderStrategy)();
 
 	// While the scene is rendering we can get the swapchain image and begin
 	// transitioning it. When it's time to blit we must synchronize to make
@@ -496,10 +495,27 @@ void Renderer::_UpdateViewProjection()
 
 void Renderer::UseStrategy(RenderStrategy strategy)
 {
-	_nextStrategy = strategy;
+	switch (strategy)
+	{
+	case Renderer::RenderStrategy::Traditional:
+		_currentRenderStrategy = &Renderer::_RenderSceneTraditional;
+		break;
+	case Renderer::RenderStrategy::IndirectRecord:
+		_currentRenderStrategy = &Renderer::_RenderIndirectRecorded;
+		break;
+	case Renderer::RenderStrategy::IndirectResubmit:
+		_currentRenderStrategy = &Renderer::_RenderIndirect;
+		break;
+	default:
+		break;
+	}
 }
 
 
+
+void Renderer::_RenderIndirect(void)
+{
+}
 
 // Render the scene in a traditional manner, i.e. rerecord the draw calls to
 // work with a dynamic scene.
@@ -583,6 +599,10 @@ void Renderer::_RenderSceneTraditional(void)
 	submitInfo.signalSemaphoreCount = 0;
 	submitInfo.pSignalSemaphores = nullptr;
 	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+}
+
+void Renderer::_RenderIndirectRecorded(void)
+{
 }
 
 // Blits the content of the offscreen buffer to the swapchain image before
