@@ -22,9 +22,22 @@ const void Scene::Init()
 
 
 	_CreateObject("../Assets/Meshes/deer-obj.obj", "../Assets/Textures/deer texture.tga", glm::translate(glm::mat4(), glm::vec3(-20, 0, 0)));
+
+	auto deer = _objects[0];
+	for (int i = 0; i < 20; i++)
+	{
+		for (int j = 0; j < 20; j++)
+		{
+			
+			deer.translation = _renderer.CreateTranslation(glm::translate(glm::mat4(), glm::vec3(20.0f * i, 0, 16.0f * j)));
+			_objects.push_back(deer);
+		}
+	}
+
 	//_CreateObject("../Assets/Meshes/bear-obj.obj", "../Assets/Textures/bear.tga");
 	//_CreateObject("../Assets/Meshes/boar-obj.obj", "../Assets/Textures/boar.tga");
 	_CreateObject("../Assets/Meshes/cube2.obj", "../Assets/Textures/cube2.png", glm::mat4());
+
 
 	for (auto& o : _objects)
 		_renderer.Submit(o.mesh, o.texture, o.translation);
