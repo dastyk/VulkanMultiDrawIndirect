@@ -546,20 +546,10 @@ void Renderer::_RenderSceneTraditional(void)
 
 	vkCmdBindDescriptorSets(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
 
-	uint32_t firstInstance = 0;
+	uint32_t firstInstance = 0; // This is used to generate offsets for the shader similarly to DrawID for indirect call
 	for (auto& mesh : _renderMeshes)
 	{
 		auto& meshHandle = get<0>(mesh);
-		auto& textureHandle = get<1>(mesh);
-		auto& translation = get<2>(mesh);
-
-		PushConstants pushConstants;
-		pushConstants.PositionOffset = get<0>(_meshes[meshHandle]); // We need to use these somehow
-		pushConstants.TexcoordOffset = get<1>(_meshes[meshHandle]);
-		pushConstants.NormalOffset = get<2>(_meshes[meshHandle]);
-		pushConstants.Translation = translation;
-
-		vkCmdPushConstants(_cmdBuffer, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pushConstants);
 		
 		const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
 		vkCmdDraw(_cmdBuffer, meshData.NumFace * 3, 1, 0, firstInstance);
@@ -1157,19 +1147,14 @@ void Renderer::_CreatePipelineLayout(void)
 {
 	array<VkDescriptorSetLayout, 1> setLayouts = { _descLayout };
 
-	VkPushConstantRange pushConstants = {};
-	pushConstants.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	pushConstants.offset = 0;
-	pushConstants.size = 3 * sizeof(uint32_t) + 1 * sizeof(glm::mat4);
-
 	VkPipelineLayoutCreateInfo layoutInfo = {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	layoutInfo.pNext = nullptr;
 	layoutInfo.flags = 0;
 	layoutInfo.setLayoutCount = setLayouts.size();
 	layoutInfo.pSetLayouts = setLayouts.data();
-	layoutInfo.pushConstantRangeCount = 1;
-	layoutInfo.pPushConstantRanges = &pushConstants;
+	layoutInfo.pushConstantRangeCount = 0;
+	layoutInfo.pPushConstantRanges = nullptr;
 
 	VkResult result = vkCreatePipelineLayout(_device, &layoutInfo, nullptr, &_pipelineLayout);
 	if (result != VK_SUCCESS)

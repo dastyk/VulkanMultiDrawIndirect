@@ -44,13 +44,6 @@ layout(set = 0, binding = INDEX) buffer Index {
 	IndexStruct g_Indices[];
 };
 
-layout(push_constant) uniform VertexOffsets {
-	uint Position;
-	uint Texcoord;
-	uint Normal;
-	uint Translation;
-} g_VertexOffsets;
-
 out gl_PerVertex
 {
 	vec4 gl_Position;
@@ -60,10 +53,10 @@ layout(location = 0) out vec2 o_TexC;
 
 void main()
 {
-	int hej = gl_BaseInstanceARB;
-	mat4 world = g_Translations[g_VertexOffsets.Translation];
-	gl_Position = g_Proj * g_View * world * vec4(imageLoad(g_Positions, int(g_VertexOffsets.Position) + gl_VertexIndex).xyz, 1.0f);
+	IndexStruct indices = g_Indices[gl_BaseInstanceARB];
+	mat4 world = g_Translations[indices.Translation];
+	gl_Position = g_Proj * g_View * world * vec4(imageLoad(g_Positions, int(indices.Position) + gl_VertexIndex).xyz, 1.0f);
 
 	
-	o_TexC = vec2(imageLoad(g_Texcoords, int(g_VertexOffsets.Texcoord) + gl_VertexIndex).xy);
+	o_TexC = vec2(imageLoad(g_Texcoords, int(indices.Texcoord) + gl_VertexIndex).xy);
 }
