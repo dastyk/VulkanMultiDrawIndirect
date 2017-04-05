@@ -6,6 +6,7 @@
 #include <SDL_syswm.h>
 #include <Parsers.h>
 #include "Timer.h"
+#include "InputManager.h"
 #define SCRWIDTH (800)
 #define SCRHEIGHT (640)
 
@@ -126,54 +127,31 @@ int main(int argc, char** argv)
 		timer.Reset();
 		timer.Start();
 		bool quit = false;
+		InputManager input;
 		do
 		{
+			input.Update();
 			timer.Tick();
 			float dt = timer.DeltaTime();
 
-			//This will have to do until we have a proper input system
-			SDL_Event ev = {};
-			while (SDL_PollEvent(&ev))
-			{
-				switch (ev.key.keysym.sym)
-				{
-				case SDLK_w:
-					scene._camera.MoveForward(dt * 10000.0f);
-					break;
-				case SDLK_s:
-					scene._camera.MoveForward(dt * -10000.0f);
-					break;
-				case SDLK_a:
-					scene._camera.MoveRight(dt * -10000.0f);
-					break;
-				case SDLK_d:
-					scene._camera.MoveRight(dt * 10000.0f);
-					break;
-				case SDLK_RIGHT:
-					scene._camera.offsetOrientation(0.0f, 800.0f * dt);
-					break;
-				case SDLK_LEFT:
-					scene._camera.offsetOrientation(0.0f, -800.0f * dt);
-					break;
-				case SDLK_UP:
-					scene._camera.offsetOrientation(-800.0f * dt, 0.0f);
-					break;
-				case SDLK_DOWN:
-					scene._camera.offsetOrientation(800.0f * dt, 0.0f);
-					break;
-				case SDLK_ESCAPE:
-					quit = true;
-					break;
-				default:
-					break;
-				}
-
-				if (ev.type == SDL_QUIT)
-				{
-					quit = true;
-				}
-
-			}
+			if (input.IsKeyDown(SDLK_w))
+				scene._camera.MoveForward(dt * 10.0f);
+			if (input.IsKeyDown(SDLK_a))
+				scene._camera.MoveRight(dt * -10.0f);
+			if (input.IsKeyDown(SDLK_s))
+				scene._camera.MoveForward(dt * -10.0f);
+			if (input.IsKeyDown(SDLK_d))
+				scene._camera.MoveRight(dt * 10.0f);
+			if (input.IsKeyDown(SDLK_RIGHT))
+				scene._camera.offsetOrientation(0.0f, 180.0f * dt);
+			if (input.IsKeyDown(SDLK_LEFT))
+				scene._camera.offsetOrientation(0.0f, -180.0f * dt);
+			if (input.IsKeyDown(SDLK_UP))
+				scene._camera.offsetOrientation(-180.0f * dt, 0.0f);
+			if (input.IsKeyDown(SDLK_DOWN))
+				scene._camera.offsetOrientation(180.0f * dt, 0.0f);
+			if (input.IsKeyDown(SDLK_ESCAPE))
+				quit = true;
 
 			scene.Frame(timer.DeltaTime());
 

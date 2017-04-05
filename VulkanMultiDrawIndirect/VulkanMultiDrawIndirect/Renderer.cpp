@@ -192,7 +192,7 @@ void Renderer::Render(void)
 
 	// While the scene is rendering we can get the swapchain image and begin
 	// transitioning it. When it's time to blit we must synchronize to make
-	// sure that the image is finished for us to read.
+	// sure that the image is finished for us to read. 
 	_BlitSwapchain();
 }
 
