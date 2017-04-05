@@ -457,9 +457,9 @@ const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationH
 
 	_vertexBufferHandler->CreateBuffer(&pushConstants, 4, VertexType::Index);
 
-
-	VkDrawIndexedIndirectCommand s = {};
-	s.indexCount = get<3>(_meshes[mesh]).NumFace * 3;
+	VkDrawIndirectCommand s = {};
+	s.vertexCount = get<3>(_meshes[mesh]).NumFace * 3;
+	s.instanceCount = 1;
 	_vertexBufferHandler->CreateBuffer(&s, 1, VertexType::IndirectBuffer);
 }
 
