@@ -231,7 +231,9 @@ Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
 				}
 				if (faceIndex.index[TEXCOORD_INDEX] != INDEX_NULL)
 				{
-					memcpy(&texBuffer[index], &dataPointers.texCoords[faceIndex.index[TEXCOORD_INDEX]], sizeof(ArfData::TexCoord));
+					ArfData::TexCoord tc = dataPointers.texCoords[faceIndex.index[TEXCOORD_INDEX]];
+					tc.v = 1.0f - tc.v;
+					memcpy(&texBuffer[index], &tc, sizeof(tc));
 				}
 				if (faceIndex.index[NORMAL_INDEX] != INDEX_NULL)
 				{
@@ -1234,7 +1236,7 @@ void Renderer::_CreatePipeline(void)
 	rasterizationState.rasterizerDiscardEnable = VK_FALSE;
 	rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
-	rasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterizationState.frontFace = VK_FRONT_FACE_CLOCKWISE;
 	rasterizationState.depthBiasEnable = VK_FALSE;
 	rasterizationState.depthBiasConstantFactor = 0.0f;
 	rasterizationState.depthBiasClamp = 0.0f;
