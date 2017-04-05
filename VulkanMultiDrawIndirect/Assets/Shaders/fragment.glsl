@@ -12,10 +12,10 @@ layout(location = 0) in vec2 i_TexC;
 
 layout(location = 0) out vec4 o_Albedo;
 
-layout(set = 0, binding = TEXTURE) uniform texture2D tex;
+layout(set = 0, binding = TEXTURE) uniform texture2D tex[2];
 layout(set = 0, binding = SAMPLER) uniform sampler samp;
 
 void main()
 {
-	o_Albedo = texture(sampler2D(tex, samp), i_TexC);
+	o_Albedo = texture(sampler2D(tex[1], samp), i_TexC);
 }

@@ -429,8 +429,8 @@ uint32_t Renderer::CreateTexture(const char * path)
 	vkdii.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	vkdii.imageView = _textures.back()._imageView;
 	vkdii.sampler = VK_NULL_HANDLE;
-
-	auto wds = VulkanHelpers::MakeWriteDescriptorSet(_descSet, 0, 0, 1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, &vkdii, nullptr, nullptr);
+	
+	auto wds = VulkanHelpers::MakeWriteDescriptorSet(_descSet, 0, _textures.size() - 1, 1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, &vkdii, nullptr, nullptr);
 
 	vkUpdateDescriptorSets(_device, 1, &wds, 0, nullptr);
 
@@ -1324,7 +1324,7 @@ void Renderer::_CreateDescriptorStuff()
 	/* Create the descriptor pool*/
 	std::vector<VkDescriptorPoolSize> _poolSizes;
 	_poolSizes.push_back(
-	{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1 });
+	{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2 });
 	_poolSizes.push_back(
 	{ VK_DESCRIPTOR_TYPE_SAMPLER, 1 });
 	_poolSizes.push_back(
@@ -1342,7 +1342,7 @@ void Renderer::_CreateDescriptorStuff()
 	bindings.push_back({
 		(uint32_t)bindings.size(),
 		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-		1,
+		2,
 		VK_SHADER_STAGE_FRAGMENT_BIT,
 		nullptr
 	});
