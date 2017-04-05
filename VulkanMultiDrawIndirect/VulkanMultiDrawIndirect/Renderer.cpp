@@ -142,6 +142,7 @@ Renderer::~Renderer()
 	vkDestroyDescriptorPool(_device, _descPool, nullptr);
 	delete _vertexBufferHandler;
 	delete _gpuTimer;
+	vkDestroyPipeline(_device, _indirectPipeline, nullptr);
 	vkDestroyPipeline(_device, _pipeline, nullptr);
 	vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
 	vkDestroyShaderModule(_device, _vertexShader, nullptr);
@@ -1165,6 +1166,24 @@ void Renderer::_CreatePipelineLayout(void)
 
 void Renderer::_CreatePipeline(void)
 {
+	struct SpecializationData
+	{
+		uint32_t IndirectRendering;
+	} data;
+
+	data.IndirectRendering = 0;
+
+	VkSpecializationMapEntry indirectRenderingConstant = {};
+	indirectRenderingConstant.constantID = 0;
+	indirectRenderingConstant.offset = 0;
+	indirectRenderingConstant.size = sizeof(uint32_t);
+
+	VkSpecializationInfo specInfo = {};
+	specInfo.mapEntryCount = 1;
+	specInfo.pMapEntries = &indirectRenderingConstant;
+	specInfo.dataSize = sizeof(SpecializationData);
+	specInfo.pData = &data;
+
 	array<VkPipelineShaderStageCreateInfo, 2> stages = {};
 	stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	stages[0].pNext = nullptr;
@@ -1172,7 +1191,7 @@ void Renderer::_CreatePipeline(void)
 	stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
 	stages[0].module = _vertexShader;
 	stages[0].pName = "main";
-	stages[0].pSpecializationInfo = nullptr;
+	stages[0].pSpecializationInfo = &specInfo;
 
 	stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	stages[1].pNext = nullptr;
@@ -1298,6 +1317,13 @@ void Renderer::_CreatePipeline(void)
 	pipelineInfo.basePipelineIndex = -1;
 
 	VkResult result = vkCreateGraphicsPipelines(_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &_pipeline);
+	if (result != VK_SUCCESS)
+	{
+		throw runtime_error("Failed to create pipeline");
+	}
+
+	data.IndirectRendering = 1;
+	result = vkCreateGraphicsPipelines(_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &_indirectPipeline);
 	if (result != VK_SUCCESS)
 	{
 		throw runtime_error("Failed to create pipeline");

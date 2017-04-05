@@ -138,6 +138,7 @@ private:
 	VkShaderModule _fragmentShader = VK_NULL_HANDLE;
 	VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
 	VkPipeline _pipeline = VK_NULL_HANDLE;
+	VkPipeline _indirectPipeline = VK_NULL_HANDLE;
 
 	VertexBufferHandler* _vertexBufferHandler;
 

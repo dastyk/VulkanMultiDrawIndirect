@@ -2,6 +2,8 @@
 //#extension SPV_KHR_shader_draw_parameters : require
 #extension GL_ARB_shader_draw_parameters : require
 
+layout(constant_id = 0) const uint INDIRECT_RENDERING = 0;
+
 #define TEXTURE 0
 #define SAMPLER 1
 #define CONSTANTBUFFER 2
@@ -53,7 +55,7 @@ layout(location = 0) out vec2 o_TexC;
 
 void main()
 {
-	IndexStruct indices = g_Indices[gl_BaseInstanceARB];
+	IndexStruct indices = g_Indices[INDIRECT_RENDERING == 1 ? gl_DrawIDARB : gl_BaseInstanceARB];
 	mat4 world = g_Translations[indices.Translation];
 	gl_Position = g_Proj * g_View * world * vec4(imageLoad(g_Positions, int(indices.Position) + gl_VertexIndex).xyz, 1.0f);
 
