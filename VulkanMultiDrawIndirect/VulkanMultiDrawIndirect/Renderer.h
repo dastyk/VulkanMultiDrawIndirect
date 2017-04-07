@@ -22,6 +22,7 @@ class Renderer
 		uint32_t TexcoordOffset;
 		uint32_t NormalOffset;
 		uint32_t Translation;
+		uint32_t Texture;
 	};
 
 

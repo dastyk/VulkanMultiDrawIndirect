@@ -27,7 +27,7 @@ private:
 		float _ltime = 0.0f;
 		float _timeElapsed = 0.0f;
 		uint32_t _frameCount = 0;
-		ProfileData() : QueryStarted(FALSE), QueryFinished(FALSE)
+		ProfileData() : QueryStarted(FALSE), QueryFinished(TRUE)
 		{
 			timer = nullptr;
 		}

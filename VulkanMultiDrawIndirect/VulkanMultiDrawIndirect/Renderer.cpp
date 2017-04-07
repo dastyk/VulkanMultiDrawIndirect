@@ -226,6 +226,14 @@ void Renderer::Render(void)
 
 	(*this.*_currentRenderStrategy)();
 
+
+	//printf("Finished in: %f", _gpuTimer->GetTime(0));
+
+
+
+
+
+
 	// While the scene is rendering we can get the swapchain image and begin
 	// transitioning it. When it's time to blit we must synchronize to make
 	// sure that the image is finished for us to read. 
@@ -487,12 +495,12 @@ const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationH
 	_renderMeshes.push_back({ mesh, texture, translation });
 
 	PushConstants pushConstants;
-	pushConstants.PositionOffset = get<0>(_meshes[mesh]); // We need to use these somehow
+	pushConstants.PositionOffset = get<0>(_meshes[mesh]);
 	pushConstants.TexcoordOffset = get<1>(_meshes[mesh]);
 	pushConstants.NormalOffset = get<2>(_meshes[mesh]);
 	pushConstants.Translation = translation;
-
-	_vertexBufferHandler->CreateBuffer(&pushConstants, 4, VertexType::Index);
+	pushConstants.Texture = texture;
+	_vertexBufferHandler->CreateBuffer(&pushConstants, 8, VertexType::Index);
 
 	VkDrawIndirectCommand s = {};
 	s.vertexCount = get<3>(_meshes[mesh]).NumFace * 3;
@@ -547,7 +555,7 @@ void Renderer::_RenderSceneTraditional(void)
 
 	vkBeginCommandBuffer(_cmdBuffer, &commandBufBeginInfo);
 
-	_gpuTimer->Start(_cmdBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
+	_gpuTimer->Start(_cmdBuffer, 0);
 
 	// Do the actual rendering
 
@@ -602,7 +610,7 @@ void Renderer::_RenderSceneTraditional(void)
 	// in the blit buffer before blitting to make sure rendering is complete.
 	// Don't forget to reset the event when we have waited on it.
 
-	_gpuTimer->End(_cmdBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0);
+	_gpuTimer->End(_cmdBuffer, 0);
 
 	vkEndCommandBuffer(_cmdBuffer);
 

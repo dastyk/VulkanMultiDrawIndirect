@@ -40,6 +40,10 @@ struct IndexStruct {
 	uint Texcoord;
 	uint Normal;
 	uint Translation;
+	uint Texture;
+	uint pad1;
+	uint pad2;
+	uint pad3;
 };
 
 layout(set = 0, binding = INDEX) buffer Index {
@@ -62,5 +66,5 @@ void main()
 
 	
 	o_TexC = vec2(imageLoad(g_Texcoords, int(indices.Texcoord) + gl_VertexIndex).xy);
-	o_TextureID = INDIRECT_RENDERING == 1 ? gl_DrawIDARB : gl_BaseInstanceARB;
+	o_TextureID = indices.Texture;
 }

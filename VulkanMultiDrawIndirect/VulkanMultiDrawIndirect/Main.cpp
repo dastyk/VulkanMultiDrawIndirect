@@ -67,7 +67,13 @@ int main(int argc, char** argv)
 
 	DebugUtils::ConsoleThread::ShowConsole();
 
+
 	
+
+
+
+
+
 	try
 	{
 
@@ -127,6 +133,7 @@ int main(int argc, char** argv)
 			IF_KEY_DOWN(SDLK_LCTRL)
 				scene._camera.MoveUpWorld(dt * -10.0f);
 			if (input.IsKeyDown(SDLK_ESCAPE))
+
 				quit = true;
 
 			scene.Frame(timer.DeltaTime());
