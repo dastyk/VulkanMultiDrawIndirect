@@ -76,6 +76,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 	vector<const char*> deviceExtensions = { "VK_KHR_swapchain", "VK_KHR_shader_draw_parameters" };
 	VkPhysicalDeviceFeatures vpdf = {};
 	vpdf.shaderStorageImageExtendedFormats = VK_TRUE;
+	vpdf.samplerAnisotropy = VK_TRUE;
 	auto lInfo = VulkanHelpers::MakeDeviceCreateInfo(1, &queueInfo, 0, nullptr, &vpdf, nullptr, deviceExtensions.size(), deviceExtensions.data());
 	VulkanHelpers::CreateLogicDevice(_devices[0], &lInfo, &_device);
 
@@ -1463,7 +1464,7 @@ void Renderer::_CreateSampler()
 	info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	info.anisotropyEnable = VK_TRUE;
-	info.maxAnisotropy = 16;
+	info.maxAnisotropy = 16.0;
 	info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 	info.compareEnable = VK_FALSE;
 	info.compareOp = VK_COMPARE_OP_ALWAYS;
