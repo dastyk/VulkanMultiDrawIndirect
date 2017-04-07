@@ -25,9 +25,9 @@ const void Scene::Init()
 	_CreateObject("../Assets/Meshes/deer-obj.obj", "../Assets/Textures/deer texture.tga", glm::translate(glm::mat4(), glm::vec3(-20, 0, 0)));
 
 	auto deer = _objects[0];
-	for (int i = 0; i < 40; i++)
+	for (int i = 0; i < 100; i++)
 	{
-		for (int j = 0; j < 40; j++)
+		for (int j = 0; j < 100; j++)
 		{
 			
 			deer.translation = _renderer.CreateTranslation(glm::translate(glm::mat4(), glm::vec3(20.0f * i, 0, 16.0f * j)));

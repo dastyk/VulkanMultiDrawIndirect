@@ -7,9 +7,9 @@ VertexBufferHandler::VertexBufferHandler(VkPhysicalDevice phydev, VkDevice devic
 	_CreateBufferSet(VertexType::Position, 1000000);
 	_CreateBufferSet(VertexType::TexCoord, 1000000);
 	_CreateBufferSet(VertexType::Normal, 1000000);
-	_CreateBufferSet(VertexType::Translation, 50000);
-	_CreateBufferSet(VertexType::IndirectBuffer, 50000);
-	_CreateBufferSet(VertexType::Index, 50000);
+	_CreateBufferSet(VertexType::Translation, 100000);
+	_CreateBufferSet(VertexType::IndirectBuffer, 100000);
+	_CreateBufferSet(VertexType::Index, 100000);
 }
 
 
@@ -119,6 +119,11 @@ void VertexBufferHandler::WriteDescriptorSets(VkDescriptorSet descSet, uint32_t 
 		bindingOffset++;
 	}
 	vkUpdateDescriptorSets(_device, s.size(), s.data(), 0, nullptr);
+}
+
+VkBuffer VertexBufferHandler::GetBuffer(VertexType type)
+{
+	return _bufferSets[type].buffer;
 }
 
 const void VertexBufferHandler::_CreateBufferSet(VertexType type, uint32_t maxElements)

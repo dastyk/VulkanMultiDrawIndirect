@@ -59,8 +59,8 @@ private:
 
 
 	void _RenderSceneTraditional(void);
-	void _RenderIndirectRecorded(void);
-	void _RenderIndirect(void);
+	void _RenderIndirectRecord(void);
+	void _RenderIndirectResubmit(void);
 
 
 	void _BlitSwapchain(void);

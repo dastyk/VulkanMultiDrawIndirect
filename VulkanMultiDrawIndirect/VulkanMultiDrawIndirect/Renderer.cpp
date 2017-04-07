@@ -79,6 +79,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 	VkPhysicalDeviceFeatures vpdf = {};
 	vpdf.shaderStorageImageExtendedFormats = VK_TRUE;
 	vpdf.samplerAnisotropy = VK_TRUE;
+	vpdf.multiDrawIndirect = VK_TRUE;
 	auto lInfo = VulkanHelpers::MakeDeviceCreateInfo(1, &queueInfo, 0, nullptr, &vpdf, nullptr, deviceExtensions.size(), deviceExtensions.data());
 	VulkanHelpers::CreateLogicDevice(_devices[0], &lInfo, &_device);
 
@@ -148,9 +149,9 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 		if (std::string("--traditional") == argv[1])
 			r->_currentRenderStrategy = &Renderer::_RenderSceneTraditional;
 		else if (std::string("--indirect-record") == argv[1])
-			r->_currentRenderStrategy = &Renderer::_RenderIndirectRecorded;
+			r->_currentRenderStrategy = &Renderer::_RenderIndirectRecord;
 		else if (std::string("--indirect-resubmit") == argv[1])
-			r->_currentRenderStrategy = &Renderer::_RenderIndirect;
+			r->_currentRenderStrategy = &Renderer::_RenderIndirectResubmit;
 		else
 		{
 			printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
@@ -540,8 +541,77 @@ void Renderer::_UpdateViewProjection()
 
 
 
-void Renderer::_RenderIndirect(void)
+void Renderer::_RenderIndirectRecord(void)
 {
+	VkCommandBufferBeginInfo commandBufBeginInfo = {};
+	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	commandBufBeginInfo.pNext = nullptr;
+	commandBufBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	commandBufBeginInfo.pInheritanceInfo = nullptr;
+
+	vkBeginCommandBuffer(_cmdBuffer, &commandBufBeginInfo);
+
+	_gpuTimer->Start(_cmdBuffer, 0);
+
+	// Do the actual rendering
+
+	array<VkClearValue, 2> clearValues = {};
+	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
+	clearValues[1].depthStencil = { 1.0f, 0 };
+
+	VkRenderPassBeginInfo beginInfo = {};
+	beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	beginInfo.pNext = nullptr;
+	beginInfo.renderPass = _renderPass;
+	beginInfo.framebuffer = _framebuffer;
+	beginInfo.renderArea = { 0, 0, _swapchainExtent.width, _swapchainExtent.height };
+	beginInfo.clearValueCount = clearValues.size();
+	beginInfo.pClearValues = clearValues.data();
+	vkCmdBeginRenderPass(_cmdBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	VkViewport viewport = {};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = _swapchainExtent.width;
+	viewport.height = _swapchainExtent.height;
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	VkRect2D scissor = {};
+	scissor.offset = { 0, 0 };
+	scissor.extent = _swapchainExtent;
+
+	vkCmdBindPipeline(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _indirectPipeline);
+	vkCmdSetViewport(_cmdBuffer, 0, 1, &viewport);
+	vkCmdSetScissor(_cmdBuffer, 0, 1, &scissor);
+
+	vkCmdBindDescriptorSets(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
+
+	vkCmdDrawIndirect(_cmdBuffer, _vertexBufferHandler->GetBuffer(VertexType::IndirectBuffer), 0, _renderMeshes.size(), sizeof(VkDrawIndirectCommand));
+
+	vkCmdEndRenderPass(_cmdBuffer);
+
+	// TODO: As of now there is no synchronization point between rendering to
+	// the offscreen buffer and using that image as blit source later. At the
+	// place of this comment we could probably issue an event that is waited on
+	// in the blit buffer before blitting to make sure rendering is complete.
+	// Don't forget to reset the event when we have waited on it.
+
+	_gpuTimer->End(_cmdBuffer, 0);
+
+	vkEndCommandBuffer(_cmdBuffer);
+
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.pNext = nullptr;
+	submitInfo.waitSemaphoreCount = 0;
+	submitInfo.pWaitSemaphores = nullptr;
+	submitInfo.pWaitDstStageMask = nullptr;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &_cmdBuffer;
+	submitInfo.signalSemaphoreCount = 0;
+	submitInfo.pSignalSemaphores = nullptr;
+	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
 }
 
 // Render the scene in a traditional manner, i.e. rerecord the draw calls to
@@ -628,7 +698,7 @@ void Renderer::_RenderSceneTraditional(void)
 	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
 }
 
-void Renderer::_RenderIndirectRecorded(void)
+void Renderer::_RenderIndirectResubmit(void)
 {
 }
 

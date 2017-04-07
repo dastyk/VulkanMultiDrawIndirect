@@ -46,7 +46,7 @@ public:
 	std::vector<VkDescriptorPoolSize> GetDescriptorPoolSizes();
 	std::vector<VkDescriptorSetLayoutBinding> GetDescriptorSetLayoutBindings(uint32_t bindingOffset);
 	void WriteDescriptorSets(VkDescriptorSet descSet, uint32_t bindingOffset);
-
+	VkBuffer GetBuffer(VertexType type);
 
 private:
 	const void _CreateBufferSet(VertexType type, uint32_t maxElements);
