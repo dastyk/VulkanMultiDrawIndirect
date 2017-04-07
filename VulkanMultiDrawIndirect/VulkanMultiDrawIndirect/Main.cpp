@@ -88,37 +88,7 @@ int main(int argc, char** argv)
 		//Vulkan needs "wndClass.hInstance" and "hwnd"
 
 		Renderer renderer(hwnd, SCRWIDTH, SCRHEIGHT);
-		DebugUtils::DebugConsole::Command_Structure renderStrategyCmd =
-		{
-			&renderer,
-			[](void* userData, int argc, char** argv) {
-				if (argc < 2)
-					return;
-
-				Renderer* r = static_cast<Renderer*>(userData);
-				if (std::string("--traditional") == argv[1])
-					r->UseStrategy(Renderer::RenderStrategy::Traditional);
-				else if (std::string("--indirect-record") == argv[1])
-					r->UseStrategy(Renderer::RenderStrategy::IndirectRecord);
-				else if (std::string("--indirect-resubmit") == argv[1])
-					r->UseStrategy(Renderer::RenderStrategy::IndirectResubmit);
-				else
-				{
-					printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
-					printf("  --traditional\t\tRecord regular draw calls into the command buffer each\n\t\t\tframe.\n");
-					printf("  --indirect-record\tRender objects using indirect draw calls where the\n\t\t\tcommand buffer is recorded each frame.\n");
-					printf("  --indirect-resubmit\tRender objects using indirect draw calls where the\n\t\t\tcommand buffer is recorded once and reused.\n");
-				}
-			},
-			[](void* userData, int argc, char** argv) {printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
-			printf("  --traditional\t\tRecord regular draw calls into the command buffer each\n\t\t\tframe.\n");
-			printf("  --indirect-record\tRender objects using indirect draw calls where the\n\t\t\tcommand buffer is recorded each frame.\n");
-			printf("  --indirect-resubmit\tRender objects using indirect draw calls where the\n\t\t\tcommand buffer is recorded once and reused.\n");},
-			"strategy",
-			"Sets the rendering strategy."
-		};
-
-		DebugUtils::ConsoleThread::AddCommand(&renderStrategyCmd);
+	
 
 		Scene scene(renderer);
 

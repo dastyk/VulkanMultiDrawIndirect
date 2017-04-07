@@ -30,13 +30,6 @@ public:
 	typedef uint32_t TextureHandle;
 	typedef uint32_t TranslationHandle;
 
-	enum class RenderStrategy
-	{
-		Traditional,
-		IndirectRecord,
-		IndirectResubmit
-	};
-
 public:
 	Renderer(HWND hwnd, uint32_t width, uint32_t height);
 	~Renderer();
@@ -52,7 +45,6 @@ public:
 	void SetViewMatrix(const glm::mat4x4& view);
 	void SetProjectionMatrix(const glm::mat4x4& projection);
 
-	void UseStrategy(RenderStrategy strategy);
 
 	float GetAspect() { return (float)_width / _height; }
 
@@ -152,7 +144,5 @@ private:
 	VkPipeline _indirectPipeline = VK_NULL_HANDLE;
 
 	VertexBufferHandler* _vertexBufferHandler;
-
-	RenderStrategy _strategy = RenderStrategy::Traditional;
 
 };

@@ -7,6 +7,8 @@
 #include <Parsers.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+#include <ConsoleThread.h>
+
 
 
 using namespace std;
@@ -131,6 +133,40 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 
 
 	_vertexBufferHandler->CreateBuffer(triangle, 3, VertexType::Position);*/
+
+
+
+	DebugUtils::DebugConsole::Command_Structure renderStrategyCmd =
+	{
+		this,
+		[](void* userData, int argc, char** argv) {
+		if (argc < 2)
+			return;
+
+		Renderer* r = static_cast<Renderer*>(userData);
+		if (std::string("--traditional") == argv[1])
+			r->_currentRenderStrategy = &Renderer::_RenderSceneTraditional;
+		else if (std::string("--indirect-record") == argv[1])
+			r->_currentRenderStrategy = &Renderer::_RenderIndirectRecorded;
+		else if (std::string("--indirect-resubmit") == argv[1])
+			r->_currentRenderStrategy = &Renderer::_RenderIndirect;
+		else
+		{
+			printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
+			printf("  --traditional\t\tRecord regular draw calls into the command buffer each\n\t\t\tframe.\n");
+			printf("  --indirect-record\tRender objects using indirect draw calls where the\n\t\t\tcommand buffer is recorded each frame.\n");
+			printf("  --indirect-resubmit\tRender objects using indirect draw calls where the\n\t\t\tcommand buffer is recorded once and reused.\n");
+		}
+	},
+		[](void* userData, int argc, char** argv) {printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
+	printf("  --traditional\t\tRecord regular draw calls into the command buffer each\n\t\t\tframe.\n");
+	printf("  --indirect-record\tRender objects using indirect draw calls where the\n\t\t\tcommand buffer is recorded each frame.\n");
+	printf("  --indirect-resubmit\tRender objects using indirect draw calls where the\n\t\t\tcommand buffer is recorded once and reused.\n");},
+		"strategy",
+		"Sets the rendering strategy."
+	};
+
+	DebugUtils::ConsoleThread::AddCommand(&renderStrategyCmd);
 }
 
 Renderer::~Renderer()
@@ -491,24 +527,6 @@ void Renderer::_UpdateViewProjection()
 	auto& sInfo = VulkanHelpers::MakeSubmitInfo(1, &_cmdBuffer);
 	VulkanHelpers::QueueSubmit(_queue, 1, &sInfo);
 	vkQueueWaitIdle(_queue);
-}
-
-void Renderer::UseStrategy(RenderStrategy strategy)
-{
-	switch (strategy)
-	{
-	case Renderer::RenderStrategy::Traditional:
-		_currentRenderStrategy = &Renderer::_RenderSceneTraditional;
-		break;
-	case Renderer::RenderStrategy::IndirectRecord:
-		_currentRenderStrategy = &Renderer::_RenderIndirectRecorded;
-		break;
-	case Renderer::RenderStrategy::IndirectResubmit:
-		_currentRenderStrategy = &Renderer::_RenderIndirect;
-		break;
-	default:
-		break;
-	}
 }
 
 
