@@ -12,7 +12,7 @@ Camera::Camera() :
 	_verticalAngle(0.0f),
 	_fieldOfView(90.0f),
 	_nearPlane(0.01f),
-	_farPlane(100.0f),
+	_farPlane(500.0f),
 	_viewportAspectRatio(4.0f / 3.0f)
 {
 }
@@ -120,6 +120,17 @@ void Camera::MoveForward(float d)
 void Camera::MoveRight(float d)
 {
 	_position += right() * d;
+}
+
+void Camera::MoveUpWorld(float d)
+{
+	glm::vec3 worldUp = glm::vec3(0, 1, 0);
+	_position += worldUp * d;
+}
+
+void Camera::MoveUpRelative(float d)
+{
+	_position += up() * d;
 }
 
 void Camera::normalizeAngles() {

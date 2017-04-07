@@ -10,6 +10,8 @@
 #define SCRWIDTH (800)
 #define SCRHEIGHT (640)
 
+#define IF_KEY_DOWN(keycode) if(input.IsKeyDown(keycode))
+
 #pragma comment(lib, "DebugConsole.lib")
 
 int main(int argc, char** argv)
@@ -120,6 +122,10 @@ int main(int argc, char** argv)
 				scene._camera.offsetOrientation(-180.0f * dt, 0.0f);
 			if (input.IsKeyDown(SDLK_DOWN))
 				scene._camera.offsetOrientation(180.0f * dt, 0.0f);
+			IF_KEY_DOWN(SDLK_LSHIFT)
+				scene._camera.MoveUpWorld(dt*10.0f);
+			IF_KEY_DOWN(SDLK_LCTRL)
+				scene._camera.MoveUpWorld(dt * -10.0f);
 			if (input.IsKeyDown(SDLK_ESCAPE))
 				quit = true;
 

@@ -33,6 +33,8 @@ public:
 
 	void MoveForward(float d);
 	void MoveRight(float d);
+	void MoveUpWorld(float d);
+	void MoveUpRelative(float d);
 
 
 private:
