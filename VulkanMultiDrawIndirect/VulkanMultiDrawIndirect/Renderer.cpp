@@ -475,10 +475,23 @@ uint32_t Renderer::CreateTexture(const char * path)
 	vkdii.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	vkdii.imageView = _textures.back()._imageView;
 	vkdii.sampler = VK_NULL_HANDLE;
-	
-	auto wds = VulkanHelpers::MakeWriteDescriptorSet(_descSet, 0, _textures.size() - 1, 1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, &vkdii, nullptr, nullptr);
+	if (_textures.size() == 1)
+	{
+		std::vector<VkWriteDescriptorSet> wds;
+		for (uint32_t i = 0; i < 2; i++)
+		{
+			wds.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, 0, i, 1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, &vkdii, nullptr, nullptr));
+		}
+		
+		vkUpdateDescriptorSets(_device, wds.size(), wds.data(), 0, nullptr);
+	}
+	else
+	{
+		auto wds = VulkanHelpers::MakeWriteDescriptorSet(_descSet, 0, _textures.size() - 1, 1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, &vkdii, nullptr, nullptr);
 
-	vkUpdateDescriptorSets(_device, 1, &wds, 0, nullptr);
+		vkUpdateDescriptorSets(_device, 1, &wds, 0, nullptr);
+	}
+	
 
 	return _textures.size() - 1;
 }
