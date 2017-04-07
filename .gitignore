@@ -244,3 +244,7 @@ ModelManifest.xml
 
 # FAKE - F# Make
 .fake/
+/VulkanMultiDrawIndirect/VulkanMultiDrawIndirect/x64/Release/VulkanHelpers.obj
+/VulkanMultiDrawIndirect/VulkanMultiDrawIndirect/x64/Release/Scene.obj
+/VulkanMultiDrawIndirect/VulkanMultiDrawIndirect/x64/Release/Renderer.obj
+/VulkanMultiDrawIndirect/VulkanMultiDrawIndirect/x64/Release/Main.obj
