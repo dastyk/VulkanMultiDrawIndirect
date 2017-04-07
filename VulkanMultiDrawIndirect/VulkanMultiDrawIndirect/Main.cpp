@@ -158,6 +158,7 @@ int main(int argc, char** argv)
 				scene._camera.MoveUpWorld(dt * -10.0f);
 			if (input.IsKeyDown(SDLK_ESCAPE))
 				quit = true;
+			
 
 			scene.Frame(timer.DeltaTime());
 
