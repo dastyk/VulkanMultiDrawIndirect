@@ -2,6 +2,8 @@
 
 #include "Renderer.h"
 #include "Camera.h"
+#include <fstream>
+#include "CPUTimer.h"
 
 class Scene
 {
@@ -20,6 +22,9 @@ public:
 	const void Init();
 	const void Frame(float dt);
 	const void Shutdown();
+
+	int StartTest(const char* outfile);
+
 	Camera _camera;
 private:
 	const void _CreateObject(const char* mesh, const char* texture, const glm::mat4& translation);
@@ -28,8 +33,7 @@ private:
 
 	std::vector<Object> _objects;
 
-
-
-	
+	CPUTimer _timer;
+	std::ofstream out;
 };
 
