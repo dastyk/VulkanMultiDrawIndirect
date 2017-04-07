@@ -135,6 +135,7 @@ int main(int argc, char** argv)
 			if (input.IsKeyDown(SDLK_ESCAPE))
 
 				quit = true;
+			
 
 			scene.Frame(timer.DeltaTime());
 
