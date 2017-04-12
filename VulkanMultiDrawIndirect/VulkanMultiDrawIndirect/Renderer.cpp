@@ -69,7 +69,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 	}
 	if (queueIndex == -1)
 		throw std::runtime_error("No queue can render");
-
+	
 
 
 	/*************Create the device**************/
@@ -85,15 +85,18 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 
 	// Get the queue
 	vkGetDeviceQueue(_device, queueIndex, 0, &_queue);
-
+	
 	// Create command pool
-	auto cmdPoolInfo = VulkanHelpers::MakeCommandPoolCreateInfo(queueIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-	VulkanHelpers::CreateCommandPool(_device, &cmdPoolInfo, &_cmdPool);
+	auto cmdPoolInfo = VulkanHelpers::MakeCommandPoolCreateInfo(queueIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
+	VulkanHelpers::CreateCommandPool(_device, &cmdPoolInfo, &_mostlyDynamicCmdPool);
+	
+	cmdPoolInfo = VulkanHelpers::MakeCommandPoolCreateInfo(queueIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+	VulkanHelpers::CreateCommandPool(_device, &cmdPoolInfo, &_mostlyStaticCmdPool);
 
 	// Allocate cmd buffer
-	VulkanHelpers::AllocateCommandBuffers(_device, &_cmdBuffer, _cmdPool);
-	VulkanHelpers::AllocateCommandBuffers(_device, &_blitCmdBuffer, _cmdPool);
-
+	VulkanHelpers::AllocateCommandBuffers(_device, &_cmdBuffer, _mostlyDynamicCmdPool);
+	VulkanHelpers::AllocateCommandBuffers(_device, &_blitCmdBuffer, _mostlyDynamicCmdPool);
+	VulkanHelpers::AllocateCommandBuffers(_device, &_traditionalCmdB, _mostlyStaticCmdPool);
 
 	_CreateSurface(hwnd);
 	_CreateSwapChain();
@@ -144,27 +147,59 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 		[](void* userData, int argc, char** argv) {
 		if (argc < 2)
 			return;
-
 		Renderer* r = static_cast<Renderer*>(userData);
-		if (std::string("--traditional") == argv[1])
-			r->_currentRenderStrategy = &Renderer::_RenderSceneTraditional;
-		else if (std::string("--indirect-record") == argv[1])
-			r->_currentRenderStrategy = &Renderer::_RenderIndirectRecord;
-		else if (std::string("--indirect-resubmit") == argv[1])
-			r->_currentRenderStrategy = &Renderer::_RenderIndirectResubmit;
-		else
+
+		if (DebugUtils::GetArg("-i", nullptr, argc, argv))
 		{
-			printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
-			printf("  --traditional\t\tRecord regular draw calls into the command buffer each\n\t\t\tframe.\n");
-			printf("  --indirect-record\tRender objects using indirect draw calls where the\n\t\t\tcommand buffer is recorded each frame.\n");
-			printf("  --indirect-resubmit\tRender objects using indirect draw calls where the\n\t\t\tcommand buffer is recorded once and reused.\n");
+			if (DebugUtils::GetArg("-r", nullptr, argc, argv)) // Indirect Record
+			{
+				r->_currentRenderStrategy = &Renderer::_RenderIndirectRecord;
+				return;
+			}
+			else if (DebugUtils::GetArg("-s", nullptr, argc, argv)) // Indirect Resubmit
+			{
+				r->_currentRenderStrategy = &Renderer::_RenderIndirectResubmit;
+				return;
+			}
 		}
+		else if (DebugUtils::GetArg("-t", nullptr, argc, argv))
+		{
+			if (DebugUtils::GetArg("-r", nullptr, argc, argv)) // Traditional
+			{
+				r->_currentRenderStrategy = &Renderer::_RenderSceneTraditional;
+				return;
+			}
+			else if (DebugUtils::GetArg("-s", nullptr, argc, argv)) // Traditional resubmit
+			{
+
+				r->_RecordTraditionalCmdBuffer(r->_traditionalCmdB);
+
+				r->_currentRenderStrategy = &Renderer::_RenderSceneTraditionalResubmit;
+				return;
+			}
+		}
+
+
+			printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
+			printf("*** Render Types ***\n");
+			printf("\t -i\t\t Use multidraw indirect rendering\n");
+			printf("\t -t\t\t Use traditional rendering\n");
+
+			printf("\n\n*** Recording options ***\n");
+			printf("\t -r\t\t Record the command buffer each frame.\n");
+			printf("\t -s\t\t Resubmit a pre-recorded command buffer\n");	
 	},
-		[](void* userData, int argc, char** argv) {printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
-	printf("  --traditional\t\tRecord regular draw calls into the command buffer each\n\t\t\tframe.\n");
-	printf("  --indirect-record\tRender objects using indirect draw calls where the\n\t\t\tcommand buffer is recorded each frame.\n");
-	printf("  --indirect-resubmit\tRender objects using indirect draw calls where the\n\t\t\tcommand buffer is recorded once and reused.\n");},
-		"strategy",
+		[](void* userData, int argc, char** argv) {
+		printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
+		printf("*** Render Types ***\n");
+		printf("\t -i\t\t Use multidraw indirect rendering\n");
+		printf("\t -t\t\t Use traditional rendering\n");
+
+		printf("\n\n*** Recording options ***\n");
+		printf("\t -r\t\t Record the command buffer each frame.\n");
+		printf("\t -s\t\t Resubmit a pre-recorded command buffer\n");
+		},
+		"strat",
 		"Sets the rendering strategy."
 	};
 
@@ -204,7 +239,8 @@ Renderer::~Renderer()
 	vkDestroySampler(_device, _sampler, nullptr);
 	vkFreeMemory(_device, _offscreenImageMemory, nullptr);
 	vkDestroyImage(_device, _offscreenImage, nullptr);
-	vkDestroyCommandPool(_device, _cmdPool, nullptr);
+	vkDestroyCommandPool(_device, _mostlyDynamicCmdPool, nullptr);
+	vkDestroyCommandPool(_device, _mostlyStaticCmdPool, nullptr);
 	vkDestroySemaphore(_device, _swapchainBlitComplete, nullptr);
 	vkDestroySemaphore(_device, _imageAvailable, nullptr);
 	for (auto view : _swapchainImageViews)
@@ -414,7 +450,7 @@ uint32_t Renderer::CreateTexture(const char * path)
 	VkCommandBufferAllocateInfo cmdBufAllInf = {};
 	cmdBufAllInf.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	cmdBufAllInf.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	cmdBufAllInf.commandPool = _cmdPool;
+	cmdBufAllInf.commandPool = _mostlyDynamicCmdPool;
 	cmdBufAllInf.commandBufferCount = 1;
 	VkCommandBuffer oneTimeBuffer;
 	vkAllocateCommandBuffers(_device, &cmdBufAllInf, &oneTimeBuffer);
@@ -450,7 +486,7 @@ uint32_t Renderer::CreateTexture(const char * path)
 	submitInfo.pCommandBuffers = &oneTimeBuffer;
 	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
 	vkQueueWaitIdle(_queue);
-	vkFreeCommandBuffers(_device, _cmdPool, 1, &oneTimeBuffer);
+	vkFreeCommandBuffers(_device, _mostlyDynamicCmdPool, 1, &oneTimeBuffer);
 
 
 	vkDeviceWaitIdle(_device);
@@ -710,6 +746,94 @@ void Renderer::_RenderSceneTraditional(void)
 	submitInfo.pSignalSemaphores = nullptr;
 	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
 }
+
+void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf)
+{
+	VkCommandBufferBeginInfo commandBufBeginInfo = {};
+	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	commandBufBeginInfo.pNext = nullptr;
+	commandBufBeginInfo.flags = 0;
+	commandBufBeginInfo.pInheritanceInfo = nullptr;
+
+	vkBeginCommandBuffer(cmdBuf, &commandBufBeginInfo);
+
+	_gpuTimer->Start(cmdBuf, 0);
+
+	// Do the actual rendering
+
+	array<VkClearValue, 2> clearValues = {};
+	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
+	clearValues[1].depthStencil = { 1.0f, 0 };
+
+	VkRenderPassBeginInfo beginInfo = {};
+	beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	beginInfo.pNext = nullptr;
+	beginInfo.renderPass = _renderPass;
+	beginInfo.framebuffer = _framebuffer;
+	beginInfo.renderArea = { 0, 0, _swapchainExtent.width, _swapchainExtent.height };
+	beginInfo.clearValueCount = clearValues.size();
+	beginInfo.pClearValues = clearValues.data();
+	vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	VkViewport viewport = {};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = _swapchainExtent.width;
+	viewport.height = _swapchainExtent.height;
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	VkRect2D scissor = {};
+	scissor.offset = { 0, 0 };
+	scissor.extent = _swapchainExtent;
+
+	vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+	vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
+	vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
+
+	vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
+
+	uint32_t firstInstance = 0; // This is used to generate offsets for the shader similarly to DrawID for indirect call
+	for (auto& mesh : _renderMeshes)
+	{
+		auto& meshHandle = get<0>(mesh);
+
+		const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
+		vkCmdDraw(cmdBuf, meshData.NumFace * 3, 1, 0, firstInstance);
+
+		firstInstance++;
+	}
+
+	vkCmdEndRenderPass(cmdBuf);
+
+	// TODO: As of now there is no synchronization point between rendering to
+	// the offscreen buffer and using that image as blit source later. At the
+	// place of this comment we could probably issue an event that is waited on
+	// in the blit buffer before blitting to make sure rendering is complete.
+	// Don't forget to reset the event when we have waited on it.
+
+	_gpuTimer->End(cmdBuf, 0);
+
+	vkEndCommandBuffer(cmdBuf);
+
+
+}
+
+void Renderer::_RenderSceneTraditionalResubmit()
+{
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.pNext = nullptr;
+	submitInfo.waitSemaphoreCount = 0;
+	submitInfo.pWaitSemaphores = nullptr;
+	submitInfo.pWaitDstStageMask = nullptr;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &_traditionalCmdB;
+	submitInfo.signalSemaphoreCount = 0;
+	submitInfo.pSignalSemaphores = nullptr;
+	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+}
+
 
 void Renderer::_RenderIndirectResubmit(void)
 {

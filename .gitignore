@@ -248,3 +248,11 @@ ModelManifest.xml
 /VulkanMultiDrawIndirect/VulkanMultiDrawIndirect/x64/Release/Scene.obj
 /VulkanMultiDrawIndirect/VulkanMultiDrawIndirect/x64/Release/Renderer.obj
 /VulkanMultiDrawIndirect/VulkanMultiDrawIndirect/x64/Release/Main.obj
+/VulkanMultiDrawIndirect/VulkanMultiDrawIndirect/x64/Release/VertexBufferHandler.obj
+/VulkanMultiDrawIndirect/VulkanMultiDrawIndirect/x64/Release/Timer.obj
+/VulkanMultiDrawIndirect/VulkanMultiDrawIndirect/x64/Release/InputManager.obj
+/VulkanMultiDrawIndirect/VulkanMultiDrawIndirect/x64/Release/GPUTimer.obj
+/VulkanMultiDrawIndirect/VulkanMultiDrawIndirect/x64/Release/CPUTimer.obj
+/VulkanMultiDrawIndirect/VulkanMultiDrawIndirect/x64/Release/Camera.obj
+/VulkanMultiDrawIndirect/x64/Release/VulkanMultiDrawIndirect.ipdb
+/VulkanMultiDrawIndirect/x64/Release/VulkanMultiDrawIndirect.iobj

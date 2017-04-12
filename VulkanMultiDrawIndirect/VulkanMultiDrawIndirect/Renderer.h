@@ -59,6 +59,8 @@ private:
 
 
 	void _RenderSceneTraditional(void);
+	void _RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf);
+	void _RenderSceneTraditionalResubmit();
 	void _RenderIndirectRecord(void);
 	void _RenderIndirectResubmit(void);
 
@@ -98,8 +100,10 @@ private:
 	VkInstance _instance;
 	std::vector<VkPhysicalDevice> _devices;
 	VkDevice _device;
-	VkCommandPool _cmdPool;
+	VkCommandPool _mostlyDynamicCmdPool;
+	VkCommandPool _mostlyStaticCmdPool;
 	VkCommandBuffer _cmdBuffer;
+	VkCommandBuffer _traditionalCmdB;
 	VkCommandBuffer _blitCmdBuffer;
 	VkQueue _queue;
 	VkDebugReportCallbackEXT _debugCallback;
