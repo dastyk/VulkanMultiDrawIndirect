@@ -10,6 +10,7 @@ VertexBufferHandler::VertexBufferHandler(VkPhysicalDevice phydev, VkDevice devic
 	_CreateBufferSet(VertexType::Translation, 100000);
 	_CreateBufferSet(VertexType::IndirectBuffer, 100000);
 	_CreateBufferSet(VertexType::Index, 100000);
+	_CreateBufferSet(VertexType::Bounding, 100000);
 }
 
 

@@ -12,7 +12,7 @@ class Scene
 		Renderer::MeshHandle mesh;
 		Renderer::TextureHandle texture;
 		Renderer::TranslationHandle translation;
-	
+		Renderer::BoundingHandle boundingHandle;
 	};
 public:
 	Scene(Renderer& renderer, float width, float height);

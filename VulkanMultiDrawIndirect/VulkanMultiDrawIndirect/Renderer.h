@@ -9,6 +9,7 @@
 #include "Texture2D.h"
 #include "VertexBufferHandler.h"
 #include <DirectXMath.h>
+#include <DirectXCollision.h>
 
 #pragma comment(lib, "vulkan-1.lib")
 
@@ -28,6 +29,7 @@ public:
 	typedef uint32_t MeshHandle;
 	typedef uint32_t TextureHandle;
 	typedef uint32_t TranslationHandle;
+	typedef uint32_t BoundingHandle;
 
 public:
 	Renderer(HWND hwnd, uint32_t width, uint32_t height);

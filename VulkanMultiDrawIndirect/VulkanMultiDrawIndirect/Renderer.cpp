@@ -332,6 +332,13 @@ Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
 	uint32_t texcoordOffset = _vertexBufferHandler->CreateBuffer(texBuffer, bufferCount, VertexType::TexCoord);
 	uint32_t normalOffset = _vertexBufferHandler->CreateBuffer(normBuffer, bufferCount, VertexType::Normal);
 
+
+	BoundingBox b;
+	BoundingBox::CreateFromPoints(b, (size_t)bufferCount, (XMFLOAT3*)posBuffer, sizeof(P));
+
+
+
+
 	delete[] dataPointers.buffer;
 	delete[] posBuffer;
 	delete[] texBuffer;
