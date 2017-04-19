@@ -157,7 +157,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Camera.cpp" />
+    <ClCompile Include="CameraManager.cpp" />
     <ClCompile Include="CPUTimer.cpp" />
     <ClCompile Include="GPUTimer.cpp" />
     <ClCompile Include="InputManager.cpp" />
@@ -165,7 +165,7 @@
     <ClCompile Include="Timer.cpp" />
     <ClCompile Include="VertexBufferHandler.cpp" />
     <ClCompile Include="VulkanHelpers.cpp" />
-    <ClInclude Include="Camera.h" />
+    <ClInclude Include="CameraManager.h" />
     <ClInclude Include="CPUTimer.h" />
     <ClInclude Include="GPUTimer.h" />
     <ClInclude Include="InputManager.h" />

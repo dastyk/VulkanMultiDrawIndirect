@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Renderer.h"
-#include "Camera.h"
 #include <fstream>
 #include "CPUTimer.h"
+#include "CameraManager.h"
 
 class Scene
 {
@@ -15,7 +15,7 @@ class Scene
 	
 	};
 public:
-	Scene(Renderer& renderer);
+	Scene(Renderer& renderer, float width, float height);
 	~Scene();
 
 
@@ -25,9 +25,9 @@ public:
 
 	int StartTest(const char* outfile);
 
-	Camera _camera;
+	CameraManager _camera;
 private:
-	const void _CreateObject(const char* mesh, const char* texture, const glm::mat4& translation);
+	const void _CreateObject(const char* mesh, const char* texture, const DirectX::XMMATRIX& translation);
 private:
 	Renderer& _renderer;
 

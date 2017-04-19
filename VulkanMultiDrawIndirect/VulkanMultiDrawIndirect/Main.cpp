@@ -98,7 +98,7 @@ int main(int argc, char** argv)
 		Renderer renderer(hwnd, SCRWIDTH, SCRHEIGHT);
 	
 
-		Scene scene(renderer);
+		Scene scene(renderer, SCRWIDTH, SCRHEIGHT);
 
 		scene.Init();
 		Timer timer;
@@ -121,17 +121,17 @@ int main(int argc, char** argv)
 			if (input.IsKeyDown(SDLK_d))
 				scene._camera.MoveRight(dt * 10.0f);
 			if (input.IsKeyDown(SDLK_RIGHT))
-				scene._camera.offsetOrientation(0.0f, 180.0f * dt);
+				scene._camera.RotateYaw(0.05f * dt);
 			if (input.IsKeyDown(SDLK_LEFT))
-				scene._camera.offsetOrientation(0.0f, -180.0f * dt);
+				scene._camera.RotateYaw(-0.05f * dt);
 			if (input.IsKeyDown(SDLK_UP))
-				scene._camera.offsetOrientation(-180.0f * dt, 0.0f);
+				scene._camera.RotatePitch(0.05f * dt);
 			if (input.IsKeyDown(SDLK_DOWN))
-				scene._camera.offsetOrientation(180.0f * dt, 0.0f);
+				scene._camera.RotatePitch(-0.05f * dt);
 			IF_KEY_DOWN(SDLK_LSHIFT)
-				scene._camera.MoveUpWorld(dt*10.0f);
+				scene._camera.MoveUp(dt*10.0f);
 			IF_KEY_DOWN(SDLK_LCTRL)
-				scene._camera.MoveUpWorld(dt * -10.0f);
+				scene._camera.MoveUp(dt * -10.0f);
 			if (input.IsKeyDown(SDLK_ESCAPE))
 
 				quit = true;

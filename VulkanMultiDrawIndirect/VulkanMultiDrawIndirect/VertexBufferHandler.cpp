@@ -133,7 +133,6 @@ const void VertexBufferHandler::_CreateBufferSet(VertexType type, uint32_t maxEl
 	auto size = byteWidth * maxElements;
 	set.maxCount = maxElements;
 	set.firstFree = 0;
-	auto test= 100 MB;
 	for (auto& t : Texels)
 	{
 		

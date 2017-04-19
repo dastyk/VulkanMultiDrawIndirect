@@ -533,8 +533,8 @@ uint32_t Renderer::CreateTexture(const char * path)
 
 	return _textures.size() - 1;
 }
-
-Renderer::TranslationHandle Renderer::CreateTranslation(const glm::mat4 & translation)
+using namespace DirectX;
+Renderer::TranslationHandle Renderer::CreateTranslation(const XMMATRIX & translation)
 {
 	uint32_t translationHandle = _vertexBufferHandler->CreateBuffer((void*)(&translation), 1, VertexType::Translation);
 
@@ -559,15 +559,15 @@ const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationH
 	_vertexBufferHandler->CreateBuffer(&s, 1, VertexType::IndirectBuffer);
 }
 
-void Renderer::SetViewMatrix(const glm::mat4x4 & view)
+void Renderer::SetViewMatrix(const XMMATRIX & view)
 {
-	_ViewProjection.view = view;
+	XMStoreFloat4x4(&_ViewProjection.view, view);
 	_UpdateViewProjection();
 }
 
-void Renderer::SetProjectionMatrix(const glm::mat4x4 & projection)
+void Renderer::SetProjectionMatrix(const XMMATRIX & projection)
 {
-	_ViewProjection.projection = projection;
+	XMStoreFloat4x4(&_ViewProjection.projection, projection);
 	_UpdateViewProjection();
 }
 

@@ -8,9 +8,7 @@
 #include "GPUTimer.h"
 #include "Texture2D.h"
 #include "VertexBufferHandler.h"
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <glm\glm.hpp>
-#include <glm\gtc\matrix_transform.hpp>
+#include <DirectXMath.h>
 
 #pragma comment(lib, "vulkan-1.lib")
 
@@ -39,12 +37,12 @@ public:
 
 	MeshHandle CreateMesh(const std::string& file);
 	uint32_t  CreateTexture(const char* path);
-	TranslationHandle CreateTranslation(const glm::mat4& translation);
+	TranslationHandle CreateTranslation(const DirectX::XMMATRIX& translation);
 	const void Submit(MeshHandle mesh, TextureHandle texture, TranslationHandle translation);
 	//const void Unsubmit(/*Mesh*/);
 
-	void SetViewMatrix(const glm::mat4x4& view);
-	void SetProjectionMatrix(const glm::mat4x4& projection);
+	void SetViewMatrix(const DirectX::XMMATRIX& view);
+	void SetProjectionMatrix(const DirectX::XMMATRIX& projection);
 
 
 	float GetAspect() { return (float)_width / _height; }
@@ -83,8 +81,8 @@ private:
 
 	struct VPUniformBuffer
 	{
-		glm::mat4x4 view = glm::mat4(); //Identity matrix as default.
-		glm::mat4x4 projection = glm::mat4();
+		DirectX::XMFLOAT4X4 view; //Identity matrix as default.
+		DirectX::XMFLOAT4X4 projection;
 	};
 	void _CreatePipelineLayout(void);
 	void _CreatePipeline(void);
