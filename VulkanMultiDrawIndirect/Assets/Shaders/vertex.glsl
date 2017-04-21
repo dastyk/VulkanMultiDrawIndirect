@@ -59,12 +59,7 @@ layout(location = 1) out uint o_TextureID;
 
 void main()
 {
-	// This code indicates that we are only provided 2046 draw calls when we should get more...
-	int i = INDIRECT_RENDERING == 1 ? gl_DrawIDARB : gl_BaseInstanceARB;
-	if (INDIRECT_RENDERING == 1) {
-		i = gl_DrawIDARB < 2046 ? 0 : 1;
-	}
-	IndexStruct indices = g_Indices[i];
+	IndexStruct indices = g_Indices[INDIRECT_RENDERING == 1 ? gl_DrawIDARB : gl_BaseInstanceARB];
 	mat4 world = g_Translations[indices.Translation];
 	gl_Position = g_Proj * g_View * world * vec4(imageLoad(g_Positions, int(indices.Position) + gl_VertexIndex).xyz, 1.0f);
 
