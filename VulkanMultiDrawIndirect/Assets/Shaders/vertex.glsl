@@ -11,8 +11,7 @@ layout(constant_id = 0) const uint INDIRECT_RENDERING = 0;
 #define TEXCOORD 4
 #define NORMAL 5
 #define TRANSLATION 6
-//#define INDIRECTBUFFER 7
-#define INDEX 8
+#define INDEX 7
 
 
 layout(set = 0, binding = POSITION, rgba32f) uniform imageBuffer g_Positions;

@@ -73,7 +73,7 @@ std::vector<VkDescriptorPoolSize> VertexBufferHandler::GetDescriptorPoolSizes()
 	for (auto& set : _bufferSets)
 		total = set.second.view == VK_NULL_HANDLE ? total : total + 1;
 	p.push_back({ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, total });
-	p.push_back({ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (uint32_t)_bufferSets.size() - total });
+	p.push_back({ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, (uint32_t)_bufferSets.size() - 1 - total }); // -1 for indirect
 	return p;
 }
 
@@ -82,6 +82,9 @@ std::vector<VkDescriptorSetLayoutBinding> VertexBufferHandler::GetDescriptorSetL
 	std::vector<VkDescriptorSetLayoutBinding> b;
 	for (auto& set : _bufferSets)
 	{
+		if (set.first == VertexType::IndirectBuffer)
+			continue;
+
 		b.push_back({
 			bindingOffset,
 			set.second.view == VK_NULL_HANDLE ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
@@ -103,6 +106,9 @@ void VertexBufferHandler::WriteDescriptorSets(VkDescriptorSet descSet, uint32_t 
 
 	for (auto& set : _bufferSets)
 	{
+		if (set.first == VertexType::IndirectBuffer)
+			continue;
+
 		if (set.second.view == VK_NULL_HANDLE)
 		{
 			dinfo.push_back({
@@ -151,8 +157,20 @@ const void VertexBufferHandler::_CreateBufferSet(VertexType type, uint32_t maxEl
 
 	
 	}
+
+	VkBufferUsageFlags flags = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	switch (type)
+	{
+	case VertexType::IndirectBuffer:
+		flags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+		break;
+	default:
+		flags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		break;
+	}
+
 	VulkanHelpers::CreateBuffer(_phydev, _device, size,
-		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+		flags,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		&set.buffer, &set.memory);
 	
