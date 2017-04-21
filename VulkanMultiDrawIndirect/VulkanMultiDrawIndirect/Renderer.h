@@ -49,6 +49,8 @@ public:
 
 	float GetAspect() { return (float)_width / _height; }
 
+
+	const void FrustumCull(VkCommandBuffer& buffer, uint32_t start, uint32_t count)const;
 private:
 	typedef void(Renderer::*RenderStrategyFP)();
 
@@ -122,8 +124,16 @@ private:
 	VkDeviceMemory _VPUniformBufferMemory;
 	VkBuffer _VPUniformBufferStaging;//Used for updating the uniform buffer
 	VkDeviceMemory _VPUniformBufferMemoryStaging;
-	std::vector<std::tuple<uint32_t, uint32_t, uint32_t, ArfData::Data>> _meshes;
+
+	DirectX::BoundingFrustum _frustum;
+	DirectX::BoundingFrustum _frustumTransformed;
+
+	std::vector<DirectX::XMFLOAT4X4> _translations;
+
+	std::vector <std::tuple<uint32_t, uint32_t>> _translationOffsets;
+	std::vector<std::tuple<uint32_t, uint32_t, uint32_t, ArfData::Data, DirectX::BoundingBox>> _meshes;
 	std::vector<std::tuple<MeshHandle, TextureHandle, TranslationHandle>> _renderMeshes; // The actual meshes to render during a frame
+	std::vector<std::tuple<MeshHandle, TextureHandle, TranslationHandle>> _submitedObjects; // The actual meshes to render during a frame
 
 	VkDescriptorPool _descPool;
 	VkDescriptorSetLayout _descLayout;
@@ -149,5 +159,7 @@ private:
 	VkPipeline _indirectPipeline = VK_NULL_HANDLE;
 
 	VertexBufferHandler* _vertexBufferHandler;
+
+
 
 };

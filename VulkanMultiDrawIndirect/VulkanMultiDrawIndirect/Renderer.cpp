@@ -10,8 +10,19 @@
 #include <ConsoleThread.h>
 
 
-
+using namespace DirectX;
 using namespace std;
+
+
+const void FrustumCullingThread(VkCommandBuffer* buffer, const Renderer* renderer, uint32_t start, uint32_t count)
+{
+	renderer->FrustumCull(*buffer, start, count);
+}
+
+
+
+
+
 
 Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderSceneTraditional)
 {
@@ -336,9 +347,6 @@ Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
 	BoundingBox b;
 	BoundingBox::CreateFromPoints(b, (size_t)bufferCount, (XMFLOAT3*)posBuffer, sizeof(P));
 
-
-
-
 	delete[] dataPointers.buffer;
 	delete[] posBuffer;
 	delete[] texBuffer;
@@ -346,7 +354,7 @@ Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
 	dataPointers.buffer = nullptr;
 
 	uint32_t meshIndex = _meshes.size();
-	_meshes.push_back({ positionOffset, texcoordOffset, normalOffset, data });
+	_meshes.push_back({ positionOffset, texcoordOffset, normalOffset, data , b});
 
 	return MeshHandle(meshIndex);
 }
@@ -543,8 +551,12 @@ uint32_t Renderer::CreateTexture(const char * path)
 using namespace DirectX;
 Renderer::TranslationHandle Renderer::CreateTranslation(const XMMATRIX & translation)
 {
-	uint32_t translationHandle = _vertexBufferHandler->CreateBuffer((void*)(&translation), 1, VertexType::Translation);
-
+	uint32_t offset = _vertexBufferHandler->CreateBuffer((void*)(&translation), 1, VertexType::Translation);
+	XMFLOAT4X4 temp;
+	XMStoreFloat4x4(&temp, translation);
+	_translations.push_back(temp);
+	_translationOffsets.push_back({ offset, _translations.size() - 1 });
+	auto translationHandle = _translationOffsets.size() - 1;
 	return translationHandle;
 }
 
@@ -569,13 +581,41 @@ const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationH
 void Renderer::SetViewMatrix(const XMMATRIX & view)
 {
 	XMStoreFloat4x4(&_ViewProjection.view, view);
+	_frustum.Transform(_frustumTransformed,XMMatrixInverse(nullptr, view));
 	_UpdateViewProjection();
 }
 
 void Renderer::SetProjectionMatrix(const XMMATRIX & projection)
 {
 	XMStoreFloat4x4(&_ViewProjection.projection, projection);
+
+	BoundingFrustum::CreateFromMatrix(_frustum, projection);
+
 	_UpdateViewProjection();
+}
+
+const void Renderer::FrustumCull(VkCommandBuffer & buffer, uint32_t start, uint32_t count)const
+{
+	BoundingOrientedBox bo;
+
+	for (auto i = start; i < count; i++)
+	{
+		auto& meshHandle = get<0>(_renderMeshes[i]);
+		auto& translationHandle = get<2>(_renderMeshes[i]);
+
+		BoundingOrientedBox::CreateFromBoundingBox(bo, get<4>(_meshes[meshHandle]));
+		auto& world = XMLoadFloat4x4(&_translations[get<1>(_translationOffsets[get<2>(_renderMeshes[i])])]);
+		bo.Transform(bo, world);
+		
+		if (_frustumTransformed.Contains(bo) == ContainmentType::CONTAINS)
+		{
+			const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
+			vkCmdDraw(buffer, meshData.NumFace * 3, 1, 0, i);
+		}
+
+	
+	}
+	return void();
 }
 
 void Renderer::_UpdateViewProjection()
@@ -718,16 +758,33 @@ void Renderer::_RenderSceneTraditional(void)
 
 	vkCmdBindDescriptorSets(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
 
-	uint32_t firstInstance = 0; // This is used to generate offsets for the shader similarly to DrawID for indirect call
-	for (auto& mesh : _renderMeshes)
-	{
-		auto& meshHandle = get<0>(mesh);
-		
-		const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
-		vkCmdDraw(_cmdBuffer, meshData.NumFace * 3, 1, 0, firstInstance);
+	//uint32_t firstInstance = 0; // This is used to generate offsets for the shader similarly to DrawID for indirect call
+	//for (auto& mesh : _renderMeshes)
+	//{
+	//	auto& meshHandle = get<0>(mesh);
+	//	
+	//	const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
+	//	vkCmdDraw(_cmdBuffer, meshData.NumFace * 3, 1, 0, firstInstance);
 
-		firstInstance++;
+	//	firstInstance++;
+	//}
+
+	static const int numT = 1;
+	std::thread threads[numT];
+	for (int i = 0; i < numT; i++)
+	{
+		threads[i] = std::thread(FrustumCullingThread, &_cmdBuffer, this, 0, _renderMeshes.size());
 	}
+	for (int i = 0; i < numT; i++)
+	{
+		threads[i].join();
+	}
+	
+
+	//FrustumCull(_cmdBuffer, 0, _renderMeshes.size());
+
+
+
 
 	vkCmdEndRenderPass(_cmdBuffer);
 
