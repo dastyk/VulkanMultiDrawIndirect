@@ -69,23 +69,25 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 	/***************Make sure the device has a queue that can handle rendering*****************/
 	auto queueFamInfo = VulkanHelpers::EnumeratePhysicalDeviceQueueFamilyProperties(_instance);
 	size_t queueIndex = -1;
-
+	size_t computeQueueIndex = -1;
+	
 	for (uint32_t i = 0; i < queueFamInfo[0].size(); i++)
 	{
-		if (queueFamInfo[0][i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+		//The same queue can do both on a 1080, so keeping it simple
+		if (queueFamInfo[0][i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT))
 		{
 			queueIndex = i;
 			break;
 		}
+		
 	}
 	if (queueIndex == -1)
-		throw std::runtime_error("No queue can render");
-	
-
+		throw std::runtime_error("No queue can render and compute");
 
 	/*************Create the device**************/
 	float queuePriority = 1.0f;
 	auto queueInfo = VulkanHelpers::MakeDeviceQueueCreateInfo(queueIndex, 1, &queuePriority);
+	
 	vector<const char*> deviceExtensions = { "VK_KHR_swapchain", "VK_KHR_shader_draw_parameters" };
 	VkPhysicalDeviceFeatures vpdf = {};
 	vpdf.shaderStorageImageExtendedFormats = VK_TRUE;
@@ -1429,6 +1431,7 @@ void Renderer::_CreateShaders(void)
 {
 	_CreateShader("../Assets/Shaders/vertex.spv", _vertexShader);
 	_CreateShader("../Assets/Shaders/fragment.spv", _fragmentShader);
+	_CreateShader("../Assets/Shaders/compute.spv", _computeShader);
 }
 
 void Renderer::_CreateShader(const char * shaderCode, VkShaderModule & shader)
@@ -1660,6 +1663,7 @@ void Renderer::_CreateDescriptorStuff()
 	{ VK_DESCRIPTOR_TYPE_SAMPLER, 1 });
 	_poolSizes.push_back(
 	{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 });
+	
 	auto& dps = _vertexBufferHandler->GetDescriptorPoolSizes();
 	_poolSizes.insert(_poolSizes.end(), dps.begin(), dps.end());
 
@@ -1691,6 +1695,7 @@ void Renderer::_CreateDescriptorStuff()
 		VK_SHADER_STAGE_VERTEX_BIT,
 		nullptr
 	});
+
 	auto& dslb = _vertexBufferHandler->GetDescriptorSetLayoutBindings(3);
 	bindings.insert(bindings.end(), dslb.begin(), dslb.end());
 
@@ -1721,7 +1726,6 @@ void Renderer::_CreateDescriptorStuff()
 		VK_DESCRIPTOR_TYPE_SAMPLER,
 		&dii, nullptr, nullptr));
 
-	
 	
 
 	/*Update the descriptor set with the binding data*/
@@ -1772,6 +1776,16 @@ void Renderer::_CreateSampler()
 	info.mipLodBias = 0;
 
 	vkCreateSampler(_device, &info, nullptr, &_sampler);
+
+}
+
+void Renderer::_ComputeStuff()
+{
+	std::vector<VkDescriptorPoolSize> _poolSizes;
+	_poolSizes.push_back(
+	{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 });
+	VulkanHelpers::CreateDescriptorPool(_device, &_descPool, 0, 10, _poolSizes.size(), _poolSizes.data());
+	
 
 }
 

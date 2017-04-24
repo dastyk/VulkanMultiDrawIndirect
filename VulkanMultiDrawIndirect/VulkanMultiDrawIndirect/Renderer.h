@@ -82,6 +82,7 @@ private:
 	void _CreateShader(const char* shaderCode, VkShaderModule& shader);
 	void _CreateVPUniformBuffer();
 	void _CreateSampler();
+	void _ComputeStuff();
 
 	struct VPUniformBuffer
 	{
@@ -139,6 +140,10 @@ private:
 	VkDescriptorSetLayout _descLayout;
 	VkDescriptorSet _descSet;
 
+	VkDescriptorPool _compDescPool;
+	VkDescriptorSetLayout _compDescLayout;
+	VkDescriptorSet _compDescSet;
+
 	std::unordered_map<std::string, uint32_t> _StringToTextureHandle;
 	std::vector<Texture2D> _textures;
 
@@ -154,6 +159,7 @@ private:
 	VkFramebuffer _framebuffer = VK_NULL_HANDLE;
 	VkShaderModule _vertexShader = VK_NULL_HANDLE;
 	VkShaderModule _fragmentShader = VK_NULL_HANDLE;
+	VkShaderModule _computeShader = VK_NULL_HANDLE;
 	VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
 	VkPipeline _pipeline = VK_NULL_HANDLE;
 	VkPipeline _indirectPipeline = VK_NULL_HANDLE;
