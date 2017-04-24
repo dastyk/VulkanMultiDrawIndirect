@@ -19,7 +19,7 @@ Scene::~Scene()
 const void Scene::Init()
 {
 	_renderer.SetProjectionMatrix(_camera.GetProj());
-
+	_camera.TranslateActiveCamera(100.0f, 0.0f, -80.0f);
 
 	_CreateObject("../Assets/Meshes/deer-obj.obj", "../Assets/Textures/deer texture.tga", XMMatrixTranslation(-20, 0, 0));
 
@@ -43,47 +43,15 @@ const void Scene::Init()
 		_renderer.Submit(o.mesh, o.texture, o.translation);
 
 
-	DebugUtils::DebugConsole::Command_Structure testStart =
-	{
-		this,
-		[](void* userData, int argc, char** argv) {
 
-		auto& scene = *(Scene*)userData;
-		int res;
-		char* filename = "log.log";
-		DebugUtils::GetArg("-o", &filename, argc, argv);
-		res = scene.StartTest(filename);
-
-		if (res == -1)
-			printf("An error occured!\n");
-		else
-			printf("Test Started... Output will be saved to: %s\n", filename);
-
-
-
-
-
-	},
-		[](void* userData, int argc, char** argv) {
-		printf("Usage: Measure the current rendering technique.\n");
-		printf("\t-o, specify the output file.\n");
-
-	},
-		"test",
-		"Starts the test sequence."
-	};
-
-
-	DebugUtils::ConsoleThread::AddCommand(&testStart);
-	
 }
 
 const void Scene::Frame(float dt)
 {
-	_timer.TimeStart("Frame");
+
 	_renderer.SetViewMatrix(_camera.GetView());
 	_renderer.Render();
-	_timer.TimeEnd("Frame");
+
 
 	//printf("MS: %f\n", _timer.GetTime("Frame"));
 }
@@ -93,15 +61,6 @@ const void Scene::Shutdown()
 	return void();
 }
 
-int Scene::StartTest(const char * outfile)
-{
-	out.open(outfile, std::ios::ate);
-	if (!out.is_open())
-		return -1;
-
-
-	return 0;
-}
 
 const void Scene::_CreateObject(const char * mesh, const char * texture, const XMMATRIX& translation)
 {
