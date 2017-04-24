@@ -641,7 +641,7 @@ const void Renderer::FrustumCull(VkCommandBuffer & buffer, uint32_t start, uint3
 		auto& world = XMLoadFloat4x4(&_translations[get<1>(_translationOffsets[get<2>(_renderMeshes[i])])]);
 		bo.Transform(bo, world);
 		
-		if (_frustumTransformed.Intersects(bo) == ContainmentType::CONTAINS)
+		if (_frustumTransformed.Intersects(bo))
 		{
 			const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
 			vkCmdDraw(buffer, meshData.NumFace * 3, 1, 0, i);
