@@ -89,6 +89,18 @@ private:
 	{
 		DirectX::XMFLOAT4X4 view; //Identity matrix as default.
 		DirectX::XMFLOAT4X4 projection;
+		
+		DirectX::XMFLOAT4 frustumOrientation;	
+		DirectX::XMFLOAT4 furstumOrigin;
+
+		float RightSlope;           // Positive X slope (X/Z).
+		float LeftSlope;            // Negative X slope.
+		float TopSlope;             // Positive Y slope (Y/Z).
+		float BottomSlope;          // Negative Y slope.
+		
+		float Near, Far;            // Z of the near plane and far plane.
+
+
 	};
 	void _CreatePipelineLayout(void);
 	void _CreatePipeline(void);
@@ -110,6 +122,11 @@ private:
 	VkCommandBuffer _traditionalCmdB;
 	VkCommandBuffer _blitCmdBuffer;
 	VkCommandBuffer _indirectResubmitCmdBuf;
+
+	static const uint8_t NUM_SEC_BUFFERS = 8;
+	VkCommandPool _secCmdPools[NUM_SEC_BUFFERS];
+	VkCommandBuffer _secBuffers[NUM_SEC_BUFFERS];
+
 	VkQueue _queue;
 	VkDebugReportCallbackEXT _debugCallback;
 	VkSurfaceKHR _surface;
@@ -128,6 +145,8 @@ private:
 	VkBuffer _VPUniformBufferStaging;//Used for updating the uniform buffer
 	VkDeviceMemory _VPUniformBufferMemoryStaging;
 
+
+	bool _doCulling;
 	DirectX::BoundingFrustum _frustum;
 	DirectX::BoundingFrustum _frustumTransformed;
 

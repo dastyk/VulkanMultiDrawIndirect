@@ -24,7 +24,7 @@ const void FrustumCullingThread(VkCommandBuffer* buffer, const Renderer* rendere
 
 
 
-Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderSceneTraditional)
+Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderSceneTraditional), _doCulling(true)
 {
 
 	/************Create Instance*************/
@@ -101,14 +101,34 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 	auto cmdPoolInfo = VulkanHelpers::MakeCommandPoolCreateInfo(queueIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
 	VulkanHelpers::CreateCommandPool(_device, &cmdPoolInfo, &_mostlyDynamicCmdPool);
 	
+	for (uint8_t i = 0; i < NUM_SEC_BUFFERS; i++)
+	{
+		VulkanHelpers::CreateCommandPool(_device, &cmdPoolInfo, &_secCmdPools[i]);
+	}
+
+
 	cmdPoolInfo = VulkanHelpers::MakeCommandPoolCreateInfo(queueIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 	VulkanHelpers::CreateCommandPool(_device, &cmdPoolInfo, &_mostlyStaticCmdPool);
 
+	
+	
+
+
 	// Allocate cmd buffer
 	VulkanHelpers::AllocateCommandBuffers(_device, &_cmdBuffer, _mostlyDynamicCmdPool);
+
+	
 	VulkanHelpers::AllocateCommandBuffers(_device, &_blitCmdBuffer, _mostlyDynamicCmdPool);
 	VulkanHelpers::AllocateCommandBuffers(_device, &_traditionalCmdB, _mostlyStaticCmdPool);
 	VulkanHelpers::AllocateCommandBuffers(_device, &_indirectResubmitCmdBuf, _mostlyStaticCmdPool);
+
+
+	for (uint8_t i = 0; i < NUM_SEC_BUFFERS; i++)
+	{
+		VulkanHelpers::AllocateCommandBuffers(_device, &_secBuffers[i], _secCmdPools[i], VK_COMMAND_BUFFER_LEVEL_SECONDARY, 1);
+	}
+	
+
 
 	_CreateSurface(hwnd);
 	_CreateSwapChain();
@@ -161,6 +181,29 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 			return;
 		Renderer* r = static_cast<Renderer*>(userData);
 
+		char* opt;
+		if (DebugUtils::GetArg("-c", &opt, argc, argv))
+		{
+			if (std::string("on") == opt)
+			{
+				r->_doCulling = true;
+			}
+			else if (std::string("off") == opt)
+			{
+				r->_doCulling = false;
+			}
+			else
+			{
+				printf("\n -c [on/off]\t\t Render with frustum culling.\n");
+			}
+			if (argc < 4)
+			{
+				return;
+			}
+		}
+
+
+
 		if (DebugUtils::GetArg("-i", nullptr, argc, argv))
 		{
 			if (DebugUtils::GetArg("-r", nullptr, argc, argv)) // Indirect Record
@@ -200,7 +243,8 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 
 			printf("\n\n*** Recording options ***\n");
 			printf("\t -r\t\t Record the command buffer each frame.\n");
-			printf("\t -s\t\t Resubmit a pre-recorded command buffer\n");	
+			printf("\t -s\t\t Resubmit a pre-recorded command buffer.\n");	
+			printf("\t -c [on/off]\t\t Render with frustum culling.\n");
 	},
 		[](void* userData, int argc, char** argv) {
 		printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
@@ -210,7 +254,8 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 
 		printf("\n\n*** Recording options ***\n");
 		printf("\t -r\t\t Record the command buffer each frame.\n");
-		printf("\t -s\t\t Resubmit a pre-recorded command buffer\n");
+		printf("\t -s\t\t Resubmit a pre-recorded command buffer.\n");
+		printf("\t -c [on/off]\t\t Render with frustum culling.\n");
 		},
 		"strat",
 		"Sets the rendering strategy."
@@ -225,6 +270,7 @@ Renderer::~Renderer()
 
 
 	vkDestroyDescriptorSetLayout(_device, _descLayout, nullptr);
+
 	vkDestroyDescriptorPool(_device, _descPool, nullptr);
 	delete _vertexBufferHandler;
 	delete _gpuTimer;
@@ -252,6 +298,10 @@ Renderer::~Renderer()
 	vkDestroySampler(_device, _sampler, nullptr);
 	vkFreeMemory(_device, _offscreenImageMemory, nullptr);
 	vkDestroyImage(_device, _offscreenImage, nullptr);
+	for (uint8_t i = 0; i < NUM_SEC_BUFFERS; i++)
+	{
+		vkDestroyCommandPool(_device, _secCmdPools[i], nullptr);
+	}
 	vkDestroyCommandPool(_device, _mostlyDynamicCmdPool, nullptr);
 	vkDestroyCommandPool(_device, _mostlyStaticCmdPool, nullptr);
 	vkDestroySemaphore(_device, _swapchainBlitComplete, nullptr);
@@ -584,6 +634,17 @@ void Renderer::SetViewMatrix(const XMMATRIX & view)
 {
 	XMStoreFloat4x4(&_ViewProjection.view, view);
 	_frustum.Transform(_frustumTransformed,XMMatrixInverse(nullptr, view));
+
+	memcpy(&_ViewProjection.furstumOrigin, &_frustumTransformed.Origin, sizeof(XMFLOAT3));
+	_ViewProjection.furstumOrigin.w = 0.0f;
+	_ViewProjection.frustumOrientation = _frustumTransformed.Orientation;
+	_ViewProjection.BottomSlope = _frustumTransformed.BottomSlope;
+	_ViewProjection.Far = _frustumTransformed.Far;
+	_ViewProjection.LeftSlope = _frustumTransformed.LeftSlope;
+	_ViewProjection.Near = _frustumTransformed.Near;
+	_ViewProjection.RightSlope = _frustumTransformed.RightSlope;
+	_ViewProjection.TopSlope = _frustumTransformed.TopSlope;
+
 	_UpdateViewProjection();
 }
 
@@ -600,7 +661,7 @@ const void Renderer::FrustumCull(VkCommandBuffer & buffer, uint32_t start, uint3
 {
 	BoundingOrientedBox bo;
 
-	for (auto i = start; i < count; i++)
+	for (auto i = start; i < start + count; i++)
 	{
 		auto& meshHandle = get<0>(_renderMeshes[i]);
 		auto& translationHandle = get<2>(_renderMeshes[i]);
@@ -609,7 +670,7 @@ const void Renderer::FrustumCull(VkCommandBuffer & buffer, uint32_t start, uint3
 		auto& world = XMLoadFloat4x4(&_translations[get<1>(_translationOffsets[get<2>(_renderMeshes[i])])]);
 		bo.Transform(bo, world);
 		
-		if (_frustumTransformed.Contains(bo) == ContainmentType::CONTAINS)
+		if (_frustumTransformed.Intersects(bo))
 		{
 			const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
 			vkCmdDraw(buffer, meshData.NumFace * 3, 1, 0, i);
@@ -662,6 +723,10 @@ void Renderer::_RenderIndirectRecord(void)
 // work with a dynamic scene.
 void Renderer::_RenderSceneTraditional(void)
 {
+
+
+
+
 	VkCommandBufferBeginInfo commandBufBeginInfo = {};
 	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	commandBufBeginInfo.pNext = nullptr;
@@ -670,7 +735,7 @@ void Renderer::_RenderSceneTraditional(void)
 
 	vkBeginCommandBuffer(_cmdBuffer, &commandBufBeginInfo);
 
-	_gpuTimer->Start(_cmdBuffer, 0);
+//	_gpuTimer->Start(_cmdBuffer, 0);
 
 	// Do the actual rendering
 
@@ -686,8 +751,6 @@ void Renderer::_RenderSceneTraditional(void)
 	beginInfo.renderArea = { 0, 0, _swapchainExtent.width, _swapchainExtent.height };
 	beginInfo.clearValueCount = clearValues.size();
 	beginInfo.pClearValues = clearValues.data();
-	vkCmdBeginRenderPass(_cmdBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
 	VkViewport viewport = {};
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
@@ -699,37 +762,63 @@ void Renderer::_RenderSceneTraditional(void)
 	VkRect2D scissor = {};
 	scissor.offset = { 0, 0 };
 	scissor.extent = _swapchainExtent;
-
-	vkCmdBindPipeline(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
-	vkCmdSetViewport(_cmdBuffer, 0, 1, &viewport);
-	vkCmdSetScissor(_cmdBuffer, 0, 1, &scissor);
-
-	vkCmdBindDescriptorSets(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
-
-	//uint32_t firstInstance = 0; // This is used to generate offsets for the shader similarly to DrawID for indirect call
-	//for (auto& mesh : _renderMeshes)
-	//{
-	//	auto& meshHandle = get<0>(mesh);
-	//	
-	//	const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
-	//	vkCmdDraw(_cmdBuffer, meshData.NumFace * 3, 1, 0, firstInstance);
-
-	//	firstInstance++;
-	//}
-
-	static const int numT = 1;
-	std::thread threads[numT];
-	for (int i = 0; i < numT; i++)
+	if (_doCulling)
 	{
-		threads[i] = std::thread(FrustumCullingThread, &_cmdBuffer, this, 0, _renderMeshes.size());
-	}
-	for (int i = 0; i < numT; i++)
-	{
-		threads[i].join();
-	}
-	
+		vkCmdBeginRenderPass(_cmdBuffer, &beginInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
-	//FrustumCull(_cmdBuffer, 0, _renderMeshes.size());
+
+
+		std::thread threads[NUM_SEC_BUFFERS];
+
+		VkCommandBufferInheritanceInfo ini = {};
+		ini.renderPass = _renderPass;
+		ini.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+		ini.framebuffer = _framebuffer;
+
+		auto meshesPerThread = _renderMeshes.size() / NUM_SEC_BUFFERS;
+
+		for (int i = 0; i < NUM_SEC_BUFFERS; i++)
+		{
+			VulkanHelpers::BeginCommandBuffer(_secBuffers[i], VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT | VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT, &ini);
+			vkCmdBindPipeline(_secBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+			vkCmdSetViewport(_secBuffers[i], 0, 1, &viewport);
+			vkCmdSetScissor(_secBuffers[i], 0, 1, &scissor);
+
+			vkCmdBindDescriptorSets(_secBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
+
+			threads[i] = std::thread(FrustumCullingThread, &_secBuffers[i], this, meshesPerThread * i, meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? _renderMeshes.size() % meshesPerThread : 0));
+		}
+		for (int i = 0; i < NUM_SEC_BUFFERS; i++)
+		{
+			threads[i].join();
+			vkEndCommandBuffer(_secBuffers[i]);
+		}
+
+		vkCmdExecuteCommands(_cmdBuffer, NUM_SEC_BUFFERS, _secBuffers);
+	}
+	else
+	{
+		vkCmdBeginRenderPass(_cmdBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		vkCmdBindPipeline(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+		vkCmdSetViewport(_cmdBuffer, 0, 1, &viewport);
+		vkCmdSetScissor(_cmdBuffer, 0, 1, &scissor);
+
+		vkCmdBindDescriptorSets(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
+
+
+		uint32_t firstInstance = 0; // This is used to generate offsets for the shader similarly to DrawID for indirect call
+		for (auto& mesh : _renderMeshes)
+		{
+			auto& meshHandle = get<0>(mesh);
+			
+			const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
+			vkCmdDraw(_cmdBuffer, meshData.NumFace * 3, 1, 0, firstInstance);
+
+			firstInstance++;
+		}
+
+	}
 
 
 
@@ -742,7 +831,7 @@ void Renderer::_RenderSceneTraditional(void)
 	// in the blit buffer before blitting to make sure rendering is complete.
 	// Don't forget to reset the event when we have waited on it.
 
-	_gpuTimer->End(_cmdBuffer, 0);
+	//_gpuTimer->End(_cmdBuffer, 0);
 
 	vkEndCommandBuffer(_cmdBuffer);
 
