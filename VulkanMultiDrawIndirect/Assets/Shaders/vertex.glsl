@@ -61,7 +61,7 @@ void main()
 {
 	IndexStruct indices = g_Indices[INDIRECT_RENDERING == 1 ? gl_DrawIDARB : gl_BaseInstanceARB];
 	mat4 world = g_Translations[indices.Translation];
-	gl_Position = g_Proj * g_View * world * vec4(imageLoad(g_Positions, int(indices.Position) + gl_VertexIndex).xyz, 1.0f);
+	gl_Position = vec4(imageLoad(g_Positions, int(indices.Position) + gl_VertexIndex).xyz, 1.0f) * world * g_View * g_Proj;
 
 	
 	o_TexC = vec2(imageLoad(g_Texcoords, int(indices.Texcoord) + gl_VertexIndex).xy);

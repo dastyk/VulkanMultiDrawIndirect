@@ -111,6 +111,7 @@ int main(int argc, char** argv)
 			input.Update();
 			timer.Tick();
 			float dt = timer.DeltaTime();
+			const float degreesPerSecond = 180.0f;
 
 			if (input.IsKeyDown(SDLK_w))
 				scene._camera.MoveForward(dt * 10.0f);
@@ -121,13 +122,13 @@ int main(int argc, char** argv)
 			if (input.IsKeyDown(SDLK_d))
 				scene._camera.MoveRight(dt * 10.0f);
 			if (input.IsKeyDown(SDLK_RIGHT))
-				scene._camera.RotateYaw(0.05f * dt);
+				scene._camera.RotateYaw(degreesPerSecond * dt);
 			if (input.IsKeyDown(SDLK_LEFT))
-				scene._camera.RotateYaw(-0.05f * dt);
+				scene._camera.RotateYaw(-degreesPerSecond * dt);
 			if (input.IsKeyDown(SDLK_UP))
-				scene._camera.RotatePitch(0.05f * dt);
+				scene._camera.RotatePitch(degreesPerSecond * dt);
 			if (input.IsKeyDown(SDLK_DOWN))
-				scene._camera.RotatePitch(-0.05f * dt);
+				scene._camera.RotatePitch(-degreesPerSecond * dt);
 			IF_KEY_DOWN(SDLK_LSHIFT)
 				scene._camera.MoveUp(dt*10.0f);
 			IF_KEY_DOWN(SDLK_LCTRL)

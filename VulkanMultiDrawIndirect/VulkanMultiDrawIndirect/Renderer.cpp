@@ -603,9 +603,10 @@ uint32_t Renderer::CreateTexture(const char * path)
 using namespace DirectX;
 Renderer::TranslationHandle Renderer::CreateTranslation(const XMMATRIX & translation)
 {
-	uint32_t offset = _vertexBufferHandler->CreateBuffer((void*)(&translation), 1, VertexType::Translation);
 	XMFLOAT4X4 temp;
 	XMStoreFloat4x4(&temp, translation);
+	XMMATRIX columnMajor = XMMatrixTranspose(translation);
+	uint32_t offset = _vertexBufferHandler->CreateBuffer((void*)(&columnMajor), 1, VertexType::Translation);
 	_translations.push_back(temp);
 	_translationOffsets.push_back({ offset, _translations.size() - 1 });
 	auto translationHandle = _translationOffsets.size() - 1;
@@ -632,7 +633,7 @@ const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationH
 
 void Renderer::SetViewMatrix(const XMMATRIX & view)
 {
-	XMStoreFloat4x4(&_ViewProjection.view, view);
+	XMStoreFloat4x4(&_ViewProjection.view, XMMatrixTranspose(view));
 	_frustum.Transform(_frustumTransformed,XMMatrixInverse(nullptr, view));
 
 	memcpy(&_ViewProjection.furstumOrigin, &_frustumTransformed.Origin, sizeof(XMFLOAT3));
@@ -650,7 +651,7 @@ void Renderer::SetViewMatrix(const XMMATRIX & view)
 
 void Renderer::SetProjectionMatrix(const XMMATRIX & projection)
 {
-	XMStoreFloat4x4(&_ViewProjection.projection, projection);
+	XMStoreFloat4x4(&_ViewProjection.projection, XMMatrixTranspose(DirectX::XMMatrixScaling(1.0f, -1.0f, 1.0f) * projection));
 
 	BoundingFrustum::CreateFromMatrix(_frustum, projection);
 
@@ -1665,7 +1666,7 @@ void Renderer::_CreatePipeline(void)
 	rasterizationState.rasterizerDiscardEnable = VK_FALSE;
 	rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
-	rasterizationState.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	rasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterizationState.depthBiasEnable = VK_FALSE;
 	rasterizationState.depthBiasConstantFactor = 0.0f;
 	rasterizationState.depthBiasClamp = 0.0f;
