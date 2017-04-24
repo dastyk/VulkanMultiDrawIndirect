@@ -24,7 +24,7 @@ const void FrustumCullingThread(VkCommandBuffer* buffer, const Renderer* rendere
 
 
 
-Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderSceneTraditional), _doCulling(true)
+Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderSceneTraditional), _doCulling(true), _testRunning(false)
 {
 
 	/************Create Instance*************/
@@ -262,6 +262,41 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 	};
 
 	DebugUtils::ConsoleThread::AddCommand(&renderStrategyCmd);
+
+
+	DebugUtils::DebugConsole::Command_Structure testStart =
+	{
+		this,
+		[](void* userData, int argc, char** argv) {
+
+		auto& renderer = *(Renderer*)userData;
+		int res;
+		char* filename = "log.log";
+		DebugUtils::GetArg("-o", &filename, argc, argv);
+		res = renderer._StartTest(filename);
+
+		if (res == -1)
+			printf("An error occured!\n");
+		else
+			printf("Test Started... Output will be saved to: %s\n", filename);
+
+
+
+
+
+	},
+		[](void* userData, int argc, char** argv) {
+		printf("Usage: Measure the current rendering technique.\n");
+		printf("\t-o, specify the output file.\n");
+
+	},
+		"test",
+		"Starts the test sequence."
+	};
+
+
+	DebugUtils::ConsoleThread::AddCommand(&testStart);
+
 }
 
 Renderer::~Renderer()
@@ -316,9 +351,34 @@ Renderer::~Renderer()
 	VulkanHelpers::DestroyDebugReportCallbackEXT(_instance, _debugCallback, nullptr);
 	vkDestroyInstance(_instance, nullptr);
 }
+int Renderer::_StartTest(const char * outfile)
+{
+	out.open(outfile, std::ios::ate);
+	if (!out.is_open())
+		return -1;
+	_frameCount = 0;
+	_frameTimes = 0.0f;
+	_testRunning = true;
+	return 0;
+}
+
+void Renderer::_EndTest()
+{
+	if (out.is_open())
+	{
+		float avgTime = _frameTimes / _frameCount;
+		out << avgTime << endl;
+		out.close();
+		printf("\n Test complete, Average frametime was: %f\n", avgTime);
+	}
+
+	_frameCount = 0;
+	_testRunning = false;
+}
 
 void Renderer::Render(void)
 {
+	_timer.TimeStart("Frame");
 	vkQueueWaitIdle(_queue);
 
 	//printf("GPU Time: %f\n", _gpuTimer->GetTime(0));
@@ -339,6 +399,18 @@ void Renderer::Render(void)
 	// transitioning it. When it's time to blit we must synchronize to make
 	// sure that the image is finished for us to read. 
 	_BlitSwapchain();
+
+	_timer.TimeEnd("Frame");
+	if (_testRunning)
+	{
+		_frameTimes += _timer.GetTime("Frame");
+		_frameCount++;
+		if (_frameCount > 100)
+		{
+			_EndTest();
+		}
+	}
+	
 }
 
 Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)

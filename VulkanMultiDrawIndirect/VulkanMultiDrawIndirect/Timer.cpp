@@ -6,7 +6,9 @@ Timer::Timer() : _secondsPerCount(0.0), _deltaTime(-1.0), _baseTime(0), _pausedT
 {
 	__int64 countsPerSec;
 	QueryPerformanceFrequency((LARGE_INTEGER*)& countsPerSec);
+	auto countsPerMS = countsPerSec / 1000.0;
 	_secondsPerCount = 1.0 / (double)countsPerSec;
+	_msPerCount = 1.0 / (double)countsPerMS;
 }
 
 
@@ -26,7 +28,13 @@ const float Timer::TotalTime() const
 	else
 		return (float)(((_currTime - _pausedTime) - _baseTime)*_secondsPerCount);
 }
-
+const float Timer::TotalTimeMS() const
+{
+	if (_stopped)
+		return (float)(((_stopTime - _pausedTime) - _baseTime)*_msPerCount);
+	else
+		return (float)(((_currTime - _pausedTime) - _baseTime)*_msPerCount);
+}
 const unsigned int Timer::GetFps() const
 {
 	return _fps;

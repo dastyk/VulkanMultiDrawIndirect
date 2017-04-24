@@ -10,6 +10,8 @@
 #include "VertexBufferHandler.h"
 #include <DirectXMath.h>
 #include <DirectXCollision.h>
+#include <fstream>
+#include "CPUTimer.h"
 
 #pragma comment(lib, "vulkan-1.lib")
 
@@ -108,7 +110,17 @@ private:
 
 
 
+	int _StartTest(const char* outfile);
+	void _EndTest();
+
 private:
+
+	CPUTimer _timer;
+	std::ofstream out;
+	uint32_t _frameCount;
+	float _frameTimes;
+	bool _testRunning;
+
 	uint32_t _width;
 	uint32_t _height;
 	GPUTimer* _gpuTimer;

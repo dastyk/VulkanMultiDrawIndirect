@@ -1,8 +1,7 @@
 #pragma once
 
 #include "Renderer.h"
-#include <fstream>
-#include "CPUTimer.h"
+
 #include "CameraManager.h"
 
 class Scene
@@ -23,8 +22,6 @@ public:
 	const void Frame(float dt);
 	const void Shutdown();
 
-	int StartTest(const char* outfile);
-
 	CameraManager _camera;
 private:
 	const void _CreateObject(const char* mesh, const char* texture, const DirectX::XMMATRIX& translation);
@@ -33,7 +30,5 @@ private:
 
 	std::vector<Object> _objects;
 
-	CPUTimer _timer;
-	std::ofstream out;
 };
 
