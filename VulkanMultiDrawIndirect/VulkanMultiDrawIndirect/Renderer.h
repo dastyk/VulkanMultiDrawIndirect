@@ -144,6 +144,8 @@ private:
 	VkBuffer _VPUniformBufferStaging;//Used for updating the uniform buffer
 	VkDeviceMemory _VPUniformBufferMemoryStaging;
 
+
+	bool _doCulling;
 	DirectX::BoundingFrustum _frustum;
 	DirectX::BoundingFrustum _frustumTransformed;
 

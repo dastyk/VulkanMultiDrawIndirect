@@ -24,7 +24,7 @@ const void FrustumCullingThread(VkCommandBuffer* buffer, const Renderer* rendere
 
 
 
-Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderSceneTraditional)
+Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderSceneTraditional), _doCulling(true)
 {
 
 	/************Create Instance*************/
@@ -116,6 +116,8 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 
 	// Allocate cmd buffer
 	VulkanHelpers::AllocateCommandBuffers(_device, &_cmdBuffer, _mostlyDynamicCmdPool);
+
+	
 	VulkanHelpers::AllocateCommandBuffers(_device, &_blitCmdBuffer, _mostlyDynamicCmdPool);
 	VulkanHelpers::AllocateCommandBuffers(_device, &_traditionalCmdB, _mostlyStaticCmdPool);
 
@@ -178,6 +180,29 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 			return;
 		Renderer* r = static_cast<Renderer*>(userData);
 
+		char* opt;
+		if (DebugUtils::GetArg("-c", &opt, argc, argv))
+		{
+			if (std::string("on") == opt)
+			{
+				r->_doCulling = true;
+			}
+			else if (std::string("off") == opt)
+			{
+				r->_doCulling = false;
+			}
+			else
+			{
+				printf("\n -c [on/off]\t\t Render with frustum culling.\n");
+			}
+			if (argc < 4)
+			{
+				return;
+			}
+		}
+
+
+
 		if (DebugUtils::GetArg("-i", nullptr, argc, argv))
 		{
 			if (DebugUtils::GetArg("-r", nullptr, argc, argv)) // Indirect Record
@@ -216,7 +241,8 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 
 			printf("\n\n*** Recording options ***\n");
 			printf("\t -r\t\t Record the command buffer each frame.\n");
-			printf("\t -s\t\t Resubmit a pre-recorded command buffer\n");	
+			printf("\t -s\t\t Resubmit a pre-recorded command buffer.\n");	
+			printf("\t -c [on/off]\t\t Render with frustum culling.\n");
 	},
 		[](void* userData, int argc, char** argv) {
 		printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
@@ -226,7 +252,8 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 
 		printf("\n\n*** Recording options ***\n");
 		printf("\t -r\t\t Record the command buffer each frame.\n");
-		printf("\t -s\t\t Resubmit a pre-recorded command buffer\n");
+		printf("\t -s\t\t Resubmit a pre-recorded command buffer.\n");
+		printf("\t -c [on/off]\t\t Render with frustum culling.\n");
 		},
 		"strat",
 		"Sets the rendering strategy."
@@ -749,42 +776,6 @@ void Renderer::_RenderIndirectRecord(void)
 void Renderer::_RenderSceneTraditional(void)
 {
 
-	VkViewport viewport = {};
-	viewport.x = 0.0f;
-	viewport.y = 0.0f;
-	viewport.width = _swapchainExtent.width;
-	viewport.height = _swapchainExtent.height;
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-
-	VkRect2D scissor = {};
-	scissor.offset = { 0, 0 };
-	scissor.extent = _swapchainExtent;
-	std::thread threads[NUM_SEC_BUFFERS];
-
-	VkCommandBufferInheritanceInfo ini = {};
-	ini.renderPass = _renderPass;
-	ini.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
-	ini.framebuffer = _framebuffer;
-
-	auto meshesPerThread = _renderMeshes.size() / NUM_SEC_BUFFERS;
-
-	for (int i = 0; i < NUM_SEC_BUFFERS; i++)
-	{
-		VulkanHelpers::BeginCommandBuffer(_secBuffers[i], VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT | VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT, &ini);
-		vkCmdBindPipeline(_secBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
-		vkCmdSetViewport(_secBuffers[i], 0, 1, &viewport);
-		vkCmdSetScissor(_secBuffers[i], 0, 1, &scissor);
-
-		vkCmdBindDescriptorSets(_secBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
-
-		threads[i] = std::thread(FrustumCullingThread, &_secBuffers[i], this, meshesPerThread * i, meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? _renderMeshes.size() % meshesPerThread : 0));
-	}
-	for (int i = 0; i < NUM_SEC_BUFFERS; i++)
-	{
-		threads[i].join();
-		vkEndCommandBuffer(_secBuffers[i]);
-	}
 
 
 
@@ -812,26 +803,74 @@ void Renderer::_RenderSceneTraditional(void)
 	beginInfo.renderArea = { 0, 0, _swapchainExtent.width, _swapchainExtent.height };
 	beginInfo.clearValueCount = clearValues.size();
 	beginInfo.pClearValues = clearValues.data();
-	vkCmdBeginRenderPass(_cmdBuffer, &beginInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+	VkViewport viewport = {};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = _swapchainExtent.width;
+	viewport.height = _swapchainExtent.height;
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
 
-	//VulkanHelpers::BeginCommandBuffer(_secBuffers[NUM_SEC_BUFFERS], VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT | VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT, &ini);
-	//
-	//vkEndCommandBuffer(_secBuffers[NUM_SEC_BUFFERS]);
-	//uint32_t firstInstance = 0; // This is used to generate offsets for the shader similarly to DrawID for indirect call
-	//for (auto& mesh : _renderMeshes)
-	//{
-	//	auto& meshHandle = get<0>(mesh);
-	//	
-	//	const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
-	//	vkCmdDraw(_cmdBuffer, meshData.NumFace * 3, 1, 0, firstInstance);
+	VkRect2D scissor = {};
+	scissor.offset = { 0, 0 };
+	scissor.extent = _swapchainExtent;
+	if (_doCulling)
+	{
+		vkCmdBeginRenderPass(_cmdBuffer, &beginInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
-	//	firstInstance++;
-	//}
 
-//	vkCmdExecuteCommands(_cmdBuffer, 1, &_secBuffers[NUM_SEC_BUFFERS]);
-	vkCmdExecuteCommands(_cmdBuffer, NUM_SEC_BUFFERS, _secBuffers);
 
-	//FrustumCull(_cmdBuffer, 0, _renderMeshes.size());
+		std::thread threads[NUM_SEC_BUFFERS];
+
+		VkCommandBufferInheritanceInfo ini = {};
+		ini.renderPass = _renderPass;
+		ini.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+		ini.framebuffer = _framebuffer;
+
+		auto meshesPerThread = _renderMeshes.size() / NUM_SEC_BUFFERS;
+
+		for (int i = 0; i < NUM_SEC_BUFFERS; i++)
+		{
+			VulkanHelpers::BeginCommandBuffer(_secBuffers[i], VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT | VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT, &ini);
+			vkCmdBindPipeline(_secBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+			vkCmdSetViewport(_secBuffers[i], 0, 1, &viewport);
+			vkCmdSetScissor(_secBuffers[i], 0, 1, &scissor);
+
+			vkCmdBindDescriptorSets(_secBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
+
+			threads[i] = std::thread(FrustumCullingThread, &_secBuffers[i], this, meshesPerThread * i, meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? _renderMeshes.size() % meshesPerThread : 0));
+		}
+		for (int i = 0; i < NUM_SEC_BUFFERS; i++)
+		{
+			threads[i].join();
+			vkEndCommandBuffer(_secBuffers[i]);
+		}
+
+		vkCmdExecuteCommands(_cmdBuffer, NUM_SEC_BUFFERS, _secBuffers);
+	}
+	else
+	{
+		vkCmdBeginRenderPass(_cmdBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		vkCmdBindPipeline(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+		vkCmdSetViewport(_cmdBuffer, 0, 1, &viewport);
+		vkCmdSetScissor(_cmdBuffer, 0, 1, &scissor);
+
+		vkCmdBindDescriptorSets(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
+
+
+		uint32_t firstInstance = 0; // This is used to generate offsets for the shader similarly to DrawID for indirect call
+		for (auto& mesh : _renderMeshes)
+		{
+			auto& meshHandle = get<0>(mesh);
+			
+			const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
+			vkCmdDraw(_cmdBuffer, meshData.NumFace * 3, 1, 0, firstInstance);
+
+			firstInstance++;
+		}
+
+	}
 
 
 
