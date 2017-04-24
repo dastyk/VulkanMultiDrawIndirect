@@ -120,6 +120,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 	
 	VulkanHelpers::AllocateCommandBuffers(_device, &_blitCmdBuffer, _mostlyDynamicCmdPool);
 	VulkanHelpers::AllocateCommandBuffers(_device, &_traditionalCmdB, _mostlyStaticCmdPool);
+	VulkanHelpers::AllocateCommandBuffers(_device, &_indirectResubmitCmdBuf, _mostlyStaticCmdPool);
 
 
 	for (uint8_t i = 0; i < NUM_SEC_BUFFERS; i++)
@@ -212,6 +213,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 			}
 			else if (DebugUtils::GetArg("-s", nullptr, argc, argv)) // Indirect Resubmit
 			{
+				r->_RecordIndirectCmdBuffer(r->_indirectResubmitCmdBuf, false);
 				r->_currentRenderStrategy = &Renderer::_RenderIndirectResubmit;
 				return;
 			}
@@ -772,63 +774,9 @@ void Renderer::_UpdateViewProjection()
 
 void Renderer::_RenderIndirectRecord(void)
 {
-	VkCommandBufferBeginInfo commandBufBeginInfo = {};
-	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	commandBufBeginInfo.pNext = nullptr;
-	commandBufBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	commandBufBeginInfo.pInheritanceInfo = nullptr;
+	_vertexBufferHandler->FlushIndirectData();
 
-	vkBeginCommandBuffer(_cmdBuffer, &commandBufBeginInfo);
-
-	_gpuTimer->Start(_cmdBuffer, 0);
-
-	// Do the actual rendering
-
-	array<VkClearValue, 2> clearValues = {};
-	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
-	clearValues[1].depthStencil = { 1.0f, 0 };
-
-	VkRenderPassBeginInfo beginInfo = {};
-	beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	beginInfo.pNext = nullptr;
-	beginInfo.renderPass = _renderPass;
-	beginInfo.framebuffer = _framebuffer;
-	beginInfo.renderArea = { 0, 0, _swapchainExtent.width, _swapchainExtent.height };
-	beginInfo.clearValueCount = clearValues.size();
-	beginInfo.pClearValues = clearValues.data();
-	vkCmdBeginRenderPass(_cmdBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-	VkViewport viewport = {};
-	viewport.x = 0.0f;
-	viewport.y = 0.0f;
-	viewport.width = _swapchainExtent.width;
-	viewport.height = _swapchainExtent.height;
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-
-	VkRect2D scissor = {};
-	scissor.offset = { 0, 0 };
-	scissor.extent = _swapchainExtent;
-
-	vkCmdBindPipeline(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _indirectPipeline);
-	vkCmdSetViewport(_cmdBuffer, 0, 1, &viewport);
-	vkCmdSetScissor(_cmdBuffer, 0, 1, &scissor);
-
-	vkCmdBindDescriptorSets(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
-
-	vkCmdDrawIndirect(_cmdBuffer, _vertexBufferHandler->GetBuffer(VertexType::IndirectBuffer), 0, _renderMeshes.size(), sizeof(VkDrawIndirectCommand));
-
-	vkCmdEndRenderPass(_cmdBuffer);
-
-	// TODO: As of now there is no synchronization point between rendering to
-	// the offscreen buffer and using that image as blit source later. At the
-	// place of this comment we could probably issue an event that is waited on
-	// in the blit buffer before blitting to make sure rendering is complete.
-	// Don't forget to reset the event when we have waited on it.
-
-	_gpuTimer->End(_cmdBuffer, 0);
-
-	vkEndCommandBuffer(_cmdBuffer);
+	_RecordIndirectCmdBuffer(_cmdBuffer, true);
 
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1044,6 +992,67 @@ void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf)
 
 }
 
+void Renderer::_RecordIndirectCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord)
+{
+	VkCommandBufferBeginInfo commandBufBeginInfo = {};
+	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	commandBufBeginInfo.pNext = nullptr;
+	commandBufBeginInfo.flags = rerecord ? VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT : 0;
+	commandBufBeginInfo.pInheritanceInfo = nullptr;
+
+	vkBeginCommandBuffer(cmdBuf, &commandBufBeginInfo);
+
+	_gpuTimer->Start(cmdBuf, 0);
+
+	// Do the actual rendering
+
+	array<VkClearValue, 2> clearValues = {};
+	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
+	clearValues[1].depthStencil = { 1.0f, 0 };
+
+	VkRenderPassBeginInfo beginInfo = {};
+	beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	beginInfo.pNext = nullptr;
+	beginInfo.renderPass = _renderPass;
+	beginInfo.framebuffer = _framebuffer;
+	beginInfo.renderArea = { 0, 0, _swapchainExtent.width, _swapchainExtent.height };
+	beginInfo.clearValueCount = clearValues.size();
+	beginInfo.pClearValues = clearValues.data();
+	vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	VkViewport viewport = {};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = _swapchainExtent.width;
+	viewport.height = _swapchainExtent.height;
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	VkRect2D scissor = {};
+	scissor.offset = { 0, 0 };
+	scissor.extent = _swapchainExtent;
+
+	vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _indirectPipeline);
+	vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
+	vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
+
+	vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
+
+	vkCmdDrawIndirect(cmdBuf, _vertexBufferHandler->GetBuffer(VertexType::IndirectBuffer), 0, _renderMeshes.size(), sizeof(VkDrawIndirectCommand));
+
+	vkCmdEndRenderPass(cmdBuf);
+
+	// TODO: As of now there is no synchronization point between rendering to
+	// the offscreen buffer and using that image as blit source later. At the
+	// place of this comment we could probably issue an event that is waited on
+	// in the blit buffer before blitting to make sure rendering is complete.
+	// Don't forget to reset the event when we have waited on it.
+
+	_gpuTimer->End(cmdBuf, 0);
+
+	vkEndCommandBuffer(cmdBuf);
+}
+
 void Renderer::_RenderSceneTraditionalResubmit()
 {
 	VkSubmitInfo submitInfo = {};
@@ -1062,6 +1071,19 @@ void Renderer::_RenderSceneTraditionalResubmit()
 
 void Renderer::_RenderIndirectResubmit(void)
 {
+	_vertexBufferHandler->FlushIndirectData();
+
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.pNext = nullptr;
+	submitInfo.waitSemaphoreCount = 0;
+	submitInfo.pWaitSemaphores = nullptr;
+	submitInfo.pWaitDstStageMask = nullptr;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &_indirectResubmitCmdBuf;
+	submitInfo.signalSemaphoreCount = 0;
+	submitInfo.pSignalSemaphores = nullptr;
+	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
 }
 
 // Blits the content of the offscreen buffer to the swapchain image before

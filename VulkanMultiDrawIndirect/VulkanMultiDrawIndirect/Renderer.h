@@ -52,7 +52,8 @@ public:
 	float GetAspect() { return (float)_width / _height; }
 
 
-	const void FrustumCull(VkCommandBuffer& buffer, uint32_t start, uint32_t count)const;
+	const void FrustumCull(VkCommandBuffer& buffer, uint32_t start, uint32_t count) const;
+
 private:
 	typedef void(Renderer::*RenderStrategyFP)();
 
@@ -64,6 +65,7 @@ private:
 
 	void _RenderSceneTraditional(void);
 	void _RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf);
+	void _RecordIndirectCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord);
 	void _RenderSceneTraditionalResubmit();
 	void _RenderIndirectRecord(void);
 	void _RenderIndirectResubmit(void);
@@ -131,8 +133,7 @@ private:
 	VkCommandBuffer _cmdBuffer;
 	VkCommandBuffer _traditionalCmdB;
 	VkCommandBuffer _blitCmdBuffer;
-
-
+	VkCommandBuffer _indirectResubmitCmdBuf;
 
 	static const uint8_t NUM_SEC_BUFFERS = 8;
 	VkCommandPool _secCmdPools[NUM_SEC_BUFFERS];
