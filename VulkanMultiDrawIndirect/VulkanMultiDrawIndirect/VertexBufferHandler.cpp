@@ -23,6 +23,8 @@ VertexBufferHandler::~VertexBufferHandler()
 		vkDestroyBuffer(_device, set.second.buffer, nullptr);
 		vkFreeMemory(_device, set.second.memory, nullptr);
 	}
+
+	delete[] _indirectCommands;
 }
 
 const uint32_t VertexBufferHandler::CreateBuffer(void* data, uint32_t numElements, VertexType type)
@@ -36,31 +38,39 @@ const uint32_t VertexBufferHandler::CreateBuffer(void* data, uint32_t numElement
 	uint32_t offset = bufferSet.firstFree;
 	bufferSet.firstFree += numElements;
 
-	/* Create a staging buffer*/
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingMemory;
-	VulkanHelpers::CreateBuffer(_phydev, _device, totalSize,
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
-		&stagingBuffer, &stagingMemory);
+	if (type != VertexType::IndirectBuffer)
+	{
+		/* Create a staging buffer*/
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingMemory;
+		VulkanHelpers::CreateBuffer(_phydev, _device, totalSize,
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+			&stagingBuffer, &stagingMemory);
 
-	/* Copy data to staging buffer*/
-	void* srcData;
-	VulkanHelpers::MapMemory(_device, stagingMemory, &srcData, totalSize);
-	memcpy(srcData, data, totalSize);
-	vkUnmapMemory(_device, stagingMemory);
-	
-	/*Copy data to the actual buffer*/
-	VulkanHelpers::BeginCommandBuffer(_cmdBuffer);
-	VulkanHelpers::CopyDataBetweenBuffers(_cmdBuffer, stagingBuffer, 0, bufferSet.buffer, offset*byteWidth, totalSize);
-	vkEndCommandBuffer(_cmdBuffer);
-	auto& sInfo = VulkanHelpers::MakeSubmitInfo(1, &_cmdBuffer);
-	VulkanHelpers::QueueSubmit(_queue, 1, &sInfo);
-	vkQueueWaitIdle(_queue);
+		/* Copy data to staging buffer*/
+		void* srcData;
+		VulkanHelpers::MapMemory(_device, stagingMemory, &srcData, totalSize);
+		memcpy(srcData, data, totalSize);
+		vkUnmapMemory(_device, stagingMemory);
 
-	/* Free staging buffer*/
-	vkDestroyBuffer(_device, stagingBuffer, nullptr);
-	vkFreeMemory(_device, stagingMemory, nullptr);
+		/*Copy data to the actual buffer*/
+		VulkanHelpers::BeginCommandBuffer(_cmdBuffer);
+		VulkanHelpers::CopyDataBetweenBuffers(_cmdBuffer, stagingBuffer, 0, bufferSet.buffer, offset*byteWidth, totalSize);
+		vkEndCommandBuffer(_cmdBuffer);
+		auto& sInfo = VulkanHelpers::MakeSubmitInfo(1, &_cmdBuffer);
+		VulkanHelpers::QueueSubmit(_queue, 1, &sInfo);
+		vkQueueWaitIdle(_queue);
+
+		/* Free staging buffer*/
+		vkDestroyBuffer(_device, stagingBuffer, nullptr);
+		vkFreeMemory(_device, stagingMemory, nullptr);
+	}
+	// Indirect buffer
+	else
+	{
+		memcpy(_indirectCommands + offset, data, totalSize);
+	}
 
 	return offset;
 
@@ -133,6 +143,26 @@ VkBuffer VertexBufferHandler::GetBuffer(VertexType type)
 	return _bufferSets[type].buffer;
 }
 
+void VertexBufferHandler::FlushIndirectData(void)
+{
+	BufferSet& bufset = _bufferSets[VertexType::IndirectBuffer];
+
+	void* data = nullptr;
+	vkMapMemory(_device, bufset.memory, 0, bufset.firstFree * sizeof(VkDrawIndirectCommand), 0, &data);
+	memcpy(data, _indirectCommands, bufset.firstFree * sizeof(VkDrawIndirectCommand));
+
+	VkMappedMemoryRange range = {};
+	range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+	range.pNext = nullptr;
+	range.memory = _bufferSets[VertexType::IndirectBuffer].memory;
+	range.offset = 0;
+	range.size = _bufferSets[VertexType::IndirectBuffer].firstFree * sizeof(VkDrawIndirectCommand);
+
+	vkFlushMappedMemoryRanges(_device, 1, &range);
+
+	vkUnmapMemory(_device, bufset.memory);
+}
+
 const void VertexBufferHandler::_CreateBufferSet(VertexType type, uint32_t maxElements)
 {
 	auto& set = _bufferSets[type];
@@ -158,20 +188,26 @@ const void VertexBufferHandler::_CreateBufferSet(VertexType type, uint32_t maxEl
 	
 	}
 
-	VkBufferUsageFlags flags = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	VkMemoryPropertyFlags memoryFlags = 0;
 	switch (type)
 	{
 	case VertexType::IndirectBuffer:
-		flags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+		usageFlags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+		memoryFlags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 		break;
 	default:
-		flags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		usageFlags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		memoryFlags |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		break;
 	}
 
 	VulkanHelpers::CreateBuffer(_phydev, _device, size,
-		flags,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		usageFlags, memoryFlags,
 		&set.buffer, &set.memory);
 	
+	if (type == VertexType::IndirectBuffer)
+	{
+		_indirectCommands = new VkDrawIndirectCommand[maxElements];
+	}
 }

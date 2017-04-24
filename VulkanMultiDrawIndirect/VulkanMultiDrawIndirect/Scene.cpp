@@ -24,9 +24,9 @@ const void Scene::Init()
 	_CreateObject("../Assets/Meshes/deer-obj.obj", "../Assets/Textures/deer texture.tga", XMMatrixTranslation(-20, 0, 0));
 
 	auto deer = _objects[0];
-	for (int i = 0; i < 4; i++)
+	for (int i = 0; i < 20; i++)
 	{
-		for (int j = 0; j < 4; j++)
+		for (int j = 0; j < 100; j++)
 		{
 
 			deer.translation = _renderer.CreateTranslation(XMMatrixTranslation(20.0f * i, 0, 16.0f * j));

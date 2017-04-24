@@ -639,6 +639,8 @@ void Renderer::_UpdateViewProjection()
 
 void Renderer::_RenderIndirectRecord(void)
 {
+	_vertexBufferHandler->FlushIndirectData();
+
 	VkCommandBufferBeginInfo commandBufBeginInfo = {};
 	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	commandBufBeginInfo.pNext = nullptr;
@@ -901,6 +903,7 @@ void Renderer::_RenderSceneTraditionalResubmit()
 
 void Renderer::_RenderIndirectResubmit(void)
 {
+	_vertexBufferHandler->FlushIndirectData();
 }
 
 // Blits the content of the offscreen buffer to the swapchain image before

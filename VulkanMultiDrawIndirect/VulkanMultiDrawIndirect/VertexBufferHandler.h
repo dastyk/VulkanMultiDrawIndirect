@@ -49,6 +49,8 @@ public:
 	void WriteDescriptorSets(VkDescriptorSet descSet, uint32_t bindingOffset);
 	VkBuffer GetBuffer(VertexType type);
 
+	void FlushIndirectData(void);
+
 private:
 	const void _CreateBufferSet(VertexType type, uint32_t maxElements);
 private:
@@ -59,5 +61,7 @@ private:
 	VkCommandBuffer _cmdBuffer;
 	VkQueue _queue;
 
+	// CPU-side store of draw calls. Will be flushed to GPU
+	VkDrawIndirectCommand* _indirectCommands = nullptr;
 };
 
