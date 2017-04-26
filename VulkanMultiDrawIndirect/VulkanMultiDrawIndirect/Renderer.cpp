@@ -367,6 +367,7 @@ void Renderer::Render(void)
 
 	// Begin rendering stuff while we potentially wait for swapchain image
 
+	// Flush the translations on the host to the gpu
 	_vertexBufferHandler->FlushBuffer(VertexType::Translation);
 
 	(*this.*_currentRenderStrategy)();

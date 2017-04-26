@@ -74,6 +74,7 @@ private:
 	void _RecordIndirectCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord);
 	void _RecordCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord, std::function<void(VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)> makeRenderPass);
 
+	void _SubmitCmdBuffer(VkCommandBuffer& cmdBuf, VkQueue& queue);
 
 	void _BlitSwapchain(void);
 	const void _CreateSurface(HWND hwnd);
