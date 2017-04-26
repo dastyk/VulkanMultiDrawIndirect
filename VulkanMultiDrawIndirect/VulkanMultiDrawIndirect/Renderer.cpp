@@ -848,7 +848,7 @@ void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord
 	scissor.offset = { 0, 0 };
 	scissor.extent = _swapchainExtent;
 
-	if (_doCulling)
+	if (_doCulling && rerecord)
 	{
 		vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
