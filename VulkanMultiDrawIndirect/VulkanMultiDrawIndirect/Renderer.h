@@ -64,7 +64,7 @@ private:
 
 
 	void _RenderSceneTraditional(void);
-	void _RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf);
+	void _RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord);
 	void _RecordIndirectCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord);
 	void _RenderSceneTraditionalResubmit();
 	void _RenderIndirectRecord(void);
