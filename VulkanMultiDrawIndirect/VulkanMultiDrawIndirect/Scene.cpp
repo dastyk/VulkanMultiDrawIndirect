@@ -4,6 +4,7 @@
 #include <glm\gtc\matrix_transform.hpp>
 #include <SDL.h>
 #include <ConsoleThread.h>
+#include <iostream>
 using namespace DirectX;
 
 Scene::Scene(Renderer& renderer, float width, float height) : _renderer(renderer), _camera(width, height), _testRunning(false)
@@ -104,9 +105,17 @@ const void Scene::Frame(float dt)
 	{
 		_frameTimes += _timer.GetTime("Frame");
 		_frameCount++;
-		if (_frameCount > 100)
+
+		const uint32_t targetFrameCount = 100;
+
+		if (_frameCount > targetFrameCount)
 		{
 			_EndTest();
+		}
+		else
+		{
+			printf("\rMeasuring: %.0f%%", 100.0f * _frameCount / targetFrameCount);
+			fflush(stdout);
 		}
 	}
 	//printf("MS: %f\n", _timer.GetTime("Frame"));
