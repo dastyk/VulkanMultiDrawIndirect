@@ -68,11 +68,11 @@ private:
 
 	void _RenderTraditionalRecord(void);
 	void _RenderTraditionalResubmit(void);
-	void _RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord);
+	void _RecordTraditionalCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecord);
 	void _RenderIndirectRecord(void);
 	void _RenderIndirectResubmit(void);
-	void _RecordIndirectCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord);
-	void _RecordCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord, std::function<void(VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)> makeRenderPass);
+	void _RecordIndirectCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecord);
+	void _RecordCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecord, std::function<void(VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)> makeRenderPass);
 
 	void _SubmitCmdBuffer(VkCommandBuffer& cmdBuf, VkQueue& queue);
 

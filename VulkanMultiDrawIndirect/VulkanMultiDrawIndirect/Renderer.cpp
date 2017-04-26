@@ -372,6 +372,7 @@ void Renderer::Render(void)
 
 	(*this.*_currentRenderStrategy)();
 
+//	_SubmitCmdBuffer(_cmdBuffer, _queue);
 
 	//printf("Finished in: %f", _gpuTimer->GetTime(0));
 
@@ -771,7 +772,7 @@ void Renderer::_UpdateViewProjection()
 
 // Render the scene in a traditional manner, i.e. rerecord the draw calls to
 // work with a dynamic scene.
-void Renderer::_RenderTraditionalRecord(void)
+void Renderer::_RenderTraditionalRecord()
 {
 	_RecordTraditionalCmdBuffer(_cmdBuffer, true);
 
@@ -788,7 +789,7 @@ void Renderer::_RenderTraditionalRecord(void)
 	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
 }
 
-void Renderer::_RenderTraditionalResubmit(void)
+void Renderer::_RenderTraditionalResubmit()
 {
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -803,7 +804,7 @@ void Renderer::_RenderTraditionalResubmit(void)
 	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
 }
 
-void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord)
+void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecord)
 {
 	auto makeRenderPass = [this, cmdBuf, rerecord](VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)
 	{
@@ -873,7 +874,7 @@ void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord
 	_RecordCmdBuffer(cmdBuf, rerecord, makeRenderPass);
 }
 
-void Renderer::_RenderIndirectRecord(void)
+void Renderer::_RenderIndirectRecord()
 {
 	//_vertexBufferHandler->FlushBuffer(VertexType::Translation);
 	_vertexBufferHandler->FlushBuffer(VertexType::IndirectBuffer);
@@ -893,7 +894,7 @@ void Renderer::_RenderIndirectRecord(void)
 	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
 }
 
-void Renderer::_RenderIndirectResubmit(void)
+void Renderer::_RenderIndirectResubmit()
 {
 	//_vertexBufferHandler->FlushBuffer(VertexType::Translation);
 	_vertexBufferHandler->FlushBuffer(VertexType::IndirectBuffer);
@@ -911,7 +912,7 @@ void Renderer::_RenderIndirectResubmit(void)
 	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
 }
 
-void Renderer::_RecordIndirectCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord)
+void Renderer::_RecordIndirectCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecord)
 {
 	auto makeRenderPass = [this, cmdBuf](VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)
 	{
@@ -931,7 +932,7 @@ void Renderer::_RecordIndirectCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord)
 	_RecordCmdBuffer(cmdBuf, rerecord, makeRenderPass);
 }
 
-void Renderer::_RecordCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord, function<void(VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)> makeRenderPass)
+void Renderer::_RecordCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecord, function<void(VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)> makeRenderPass)
 {
 	VkCommandBufferBeginInfo commandBufBeginInfo = {};
 	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -981,6 +982,21 @@ void Renderer::_RecordCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord, function<
 	_gpuTimer->End(cmdBuf, 0);
 
 	vkEndCommandBuffer(cmdBuf);
+}
+
+void Renderer::_SubmitCmdBuffer(VkCommandBuffer & cmdBuf, VkQueue & queue)
+{
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.pNext = nullptr;
+	submitInfo.waitSemaphoreCount = 0;
+	submitInfo.pWaitSemaphores = nullptr;
+	submitInfo.pWaitDstStageMask = nullptr;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &cmdBuf;
+	submitInfo.signalSemaphoreCount = 0;
+	submitInfo.pSignalSemaphores = nullptr;
+	vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
 }
 
 // Blits the content of the offscreen buffer to the swapchain image before
