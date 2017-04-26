@@ -7,8 +7,8 @@ VertexBufferHandler::VertexBufferHandler(VkPhysicalDevice phydev, VkDevice devic
 	_CreateBufferSet(VertexType::Position, 1000000);
 	_CreateBufferSet(VertexType::TexCoord, 1000000);
 	_CreateBufferSet(VertexType::Normal, 1000000);
-	_CreateBufferSet(VertexType::Translation, 100000);
-	_CreateBufferSet(VertexType::IndirectBuffer, 100000);
+	_CreateBufferSet(VertexType::Translation, 100000, true);
+	_CreateBufferSet(VertexType::IndirectBuffer, 100000, true);
 	_CreateBufferSet(VertexType::Index, 100000);
 	_CreateBufferSet(VertexType::Bounding, 100000);
 }
@@ -22,9 +22,10 @@ VertexBufferHandler::~VertexBufferHandler()
 			vkDestroyBufferView(_device, set.second.view, nullptr);
 		vkDestroyBuffer(_device, set.second.buffer, nullptr);
 		vkFreeMemory(_device, set.second.memory, nullptr);
+		delete set.second.memoryHost;
 	}
 
-	delete[] _indirectCommands;
+
 }
 
 const uint32_t VertexBufferHandler::CreateBuffer(void* data, uint32_t numElements, VertexType type)
@@ -38,7 +39,7 @@ const uint32_t VertexBufferHandler::CreateBuffer(void* data, uint32_t numElement
 	uint32_t offset = bufferSet.firstFree;
 	bufferSet.firstFree += numElements;
 
-	if (type != VertexType::IndirectBuffer)
+	if (!bufferSet.memoryHost)
 	{
 		/* Create a staging buffer*/
 		VkBuffer stagingBuffer;
@@ -69,7 +70,7 @@ const uint32_t VertexBufferHandler::CreateBuffer(void* data, uint32_t numElement
 	// Indirect buffer
 	else
 	{
-		memcpy(_indirectCommands + offset, data, totalSize);
+		memcpy(bufferSet.memoryHost + offset*byteWidth, data, totalSize);
 	}
 
 	return offset;
@@ -143,27 +144,38 @@ VkBuffer VertexBufferHandler::GetBuffer(VertexType type)
 	return _bufferSets[type].buffer;
 }
 
-void VertexBufferHandler::FlushIndirectData(void)
+void VertexBufferHandler::FlushBuffer(VertexType type)
 {
-	BufferSet& bufset = _bufferSets[VertexType::IndirectBuffer];
-
+	BufferSet& bufset = _bufferSets[type];
+	auto byteWidth = TypeSize(type);
 	void* data = nullptr;
-	vkMapMemory(_device, bufset.memory, 0, bufset.firstFree * sizeof(VkDrawIndirectCommand), 0, &data);
-	memcpy(data, _indirectCommands, bufset.firstFree * sizeof(VkDrawIndirectCommand));
+	vkMapMemory(_device, bufset.memory, 0, bufset.firstFree * byteWidth, 0, &data);
+	memcpy(data, bufset.memoryHost, bufset.firstFree * byteWidth);
 
 	VkMappedMemoryRange range = {};
 	range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
 	range.pNext = nullptr;
-	range.memory = _bufferSets[VertexType::IndirectBuffer].memory;
+	range.memory = bufset.memory;
 	range.offset = 0;
-	range.size = _bufferSets[VertexType::IndirectBuffer].firstFree * sizeof(VkDrawIndirectCommand);
+	range.size = bufset.firstFree * byteWidth;
 
 	vkFlushMappedMemoryRanges(_device, 1, &range);
 
 	vkUnmapMemory(_device, bufset.memory);
 }
 
-const void VertexBufferHandler::_CreateBufferSet(VertexType type, uint32_t maxElements)
+void VertexBufferHandler::Update(void * data, uint32_t numElements, VertexType type, uint32_t offset)
+{
+	BufferSet& bufset = _bufferSets[type];
+	auto byteWidth = TypeSize(type);
+	auto byteOffset = byteWidth * offset;
+
+	memcpy(bufset.memoryHost + byteOffset, data, numElements*byteWidth);
+
+
+}
+
+const void VertexBufferHandler::_CreateBufferSet(VertexType type, uint32_t maxElements, bool hostVis)
 {
 	auto& set = _bufferSets[type];
 	auto byteWidth = TypeSize(type);
@@ -198,7 +210,7 @@ const void VertexBufferHandler::_CreateBufferSet(VertexType type, uint32_t maxEl
 		break;
 	default:
 		usageFlags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-		memoryFlags |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+		memoryFlags |= hostVis ? VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		break;
 	}
 
@@ -206,8 +218,8 @@ const void VertexBufferHandler::_CreateBufferSet(VertexType type, uint32_t maxEl
 		usageFlags, memoryFlags,
 		&set.buffer, &set.memory);
 	
-	if (type == VertexType::IndirectBuffer)
+	if (hostVis)
 	{
-		_indirectCommands = new VkDrawIndirectCommand[maxElements];
+		set.memoryHost = new char[size];
 	}
 }

@@ -45,6 +45,8 @@ public:
 	const void Submit(MeshHandle mesh, TextureHandle texture, TranslationHandle translation);
 	//const void Unsubmit(/*Mesh*/);
 
+	const void UpdateTranslation(const DirectX::XMMATRIX& translation, TranslationHandle translationHandle);
+
 	void SetViewMatrix(const DirectX::XMMATRIX& view);
 	void SetProjectionMatrix(const DirectX::XMMATRIX& projection);
 
@@ -53,7 +55,7 @@ public:
 
 
 	const void FrustumCull(VkCommandBuffer& buffer, uint32_t start, uint32_t count) const;
-
+	const void RecordDrawCalls(VkCommandBuffer& buffer, uint32_t start, uint32_t count) const;
 private:
 	typedef void(Renderer::*RenderStrategyFP)();
 
@@ -109,14 +111,14 @@ private:
 	void _CreateDescriptorStuff();
 
 
-
-	int _StartTest(const char* outfile);
-	void _EndTest();
+public:
+	int StartTest();
+	float EndTest();
 
 private:
 
 	CPUTimer _timer;
-	std::ofstream out;
+	
 	uint32_t _frameCount;
 	float _frameTimes;
 	bool _testRunning;
@@ -161,6 +163,8 @@ private:
 	bool _doCulling;
 	DirectX::BoundingFrustum _frustum;
 	DirectX::BoundingFrustum _frustumTransformed;
+
+	bool _doThreadedRecord;
 
 	std::vector<DirectX::XMFLOAT4X4> _translations;
 
