@@ -14,6 +14,7 @@ layout(constant_id = 0) const uint INDIRECT_RENDERING = 0;
 #define INDEX 7
 
 
+
 layout(set = 0, binding = POSITION, rgba32f) uniform imageBuffer g_Positions;
 layout(set = 0, binding = TEXCOORD, rg32f) uniform imageBuffer g_Texcoords;
 

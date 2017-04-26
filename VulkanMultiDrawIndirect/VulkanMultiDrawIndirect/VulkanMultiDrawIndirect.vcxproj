@@ -181,6 +181,7 @@
     <ClCompile Include="Scene.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\Assets\Shaders\compute.glsl" />
     <None Include="..\Assets\Shaders\fragment.glsl" />
     <None Include="..\Assets\Shaders\vertex.glsl" />
   </ItemGroup>

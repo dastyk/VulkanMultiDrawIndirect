@@ -24,6 +24,25 @@ class Renderer
 		uint32_t Texture;
 	};
 
+	struct GPUFriendlyBB
+	{
+		float px, py, pz;
+		float padding;
+		float ex, ey, ez;
+		float padding2;
+		uint32_t containedVertices;
+		uint32_t padding3[3];
+	};
+
+	struct GPUFriendlyFrustum
+	{
+		float lpx, lpy, lpz, lpd; //Left plane
+		float rpx, rpy, rpz, rpd; //Right plane
+		float bpx, bpy, bpz, bpd; //Bottom plane
+		float tpx, tpy, tpz, tpd; //Top plane
+		float npx, npy, npz, npd; //near plane
+		float fpx, fpy, fpz, fpd; //Far plane
+	};
 
 public:
 	typedef uint32_t MeshHandle;
@@ -54,6 +73,7 @@ public:
 private:
 	typedef void(Renderer::*RenderStrategyFP)();
 
+	void _UpdateFrustumPlanes();
 	void _UpdateViewProjection();
 
 	RenderStrategyFP _currentRenderStrategy;
@@ -81,6 +101,7 @@ private:
 	void _CreateShaders(void);
 	void _CreateShader(const char* shaderCode, VkShaderModule& shader);
 	void _CreateVPUniformBuffer();
+	void _CreateCullingBuffer();
 	void _CreateSampler();
 	void _ComputeStuff();
 
@@ -89,8 +110,16 @@ private:
 		DirectX::XMFLOAT4X4 view; //Identity matrix as default.
 		DirectX::XMFLOAT4X4 projection;
 	};
+
+	struct GPUCullUniformBuffer
+	{
+		GPUFriendlyFrustum frustum;
+		uint32_t objectCount;
+		uint32_t padding[3];
+	};
 	void _CreatePipelineLayout(void);
 	void _CreatePipeline(void);
+	void _CreateComputePipeline();
 	void _CreateDescriptorStuff();
 
 
@@ -125,6 +154,12 @@ private:
 	VkDeviceMemory _VPUniformBufferMemory;
 	VkBuffer _VPUniformBufferStaging;//Used for updating the uniform buffer
 	VkDeviceMemory _VPUniformBufferMemoryStaging;
+
+	GPUCullUniformBuffer _CullingInfo;
+	VkBuffer _CullingBuffer;
+	VkDeviceMemory _CullingMemory;
+	VkBuffer _CullingStagingBuffer;
+	VkDeviceMemory _CullingStagingMemory;
 
 	DirectX::BoundingFrustum _frustum;
 	DirectX::BoundingFrustum _frustumTransformed;
@@ -161,8 +196,10 @@ private:
 	VkShaderModule _fragmentShader = VK_NULL_HANDLE;
 	VkShaderModule _computeShader = VK_NULL_HANDLE;
 	VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
+	VkPipelineLayout _compPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline _pipeline = VK_NULL_HANDLE;
 	VkPipeline _indirectPipeline = VK_NULL_HANDLE;
+	VkPipeline _computePipeline = VK_NULL_HANDLE;
 
 	VertexBufferHandler* _vertexBufferHandler;
 
