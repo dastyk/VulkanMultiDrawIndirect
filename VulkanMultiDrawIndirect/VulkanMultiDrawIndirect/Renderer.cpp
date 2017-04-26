@@ -19,12 +19,16 @@ const void FrustumCullingThread(VkCommandBuffer* buffer, const Renderer* rendere
 	renderer->FrustumCull(*buffer, start, count);
 }
 
+const void RecordDrawCallsThread(VkCommandBuffer* buffer, const Renderer* renderer, uint32_t start, uint32_t count)
+{
+	renderer->RecordDrawCalls(*buffer, start, count);
+}
 
 
 
 
 
-Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderTraditionalRecord), _doCulling(true), _testRunning(false)
+Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderTraditionalRecord), _doThreadedRecord(true), _doCulling(true), _testRunning(false)
 {
 
 	/************Create Instance*************/
@@ -202,7 +206,25 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 			}
 		}
 
-
+		if (DebugUtils::GetArg("-m", &opt, argc, argv))
+		{
+			if (std::string("on") == opt)
+			{
+				r->_doThreadedRecord = true;
+			}
+			else if (std::string("off") == opt)
+			{
+				r->_doThreadedRecord = false;
+			}
+			else
+			{
+				printf("\n -m [on/off]\t\t Record draw commands with multithreading.\n");
+			}
+			if (argc < 4)
+			{
+				return;
+			}
+		}
 
 		if (DebugUtils::GetArg("-i", nullptr, argc, argv))
 		{
@@ -262,38 +284,6 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 	DebugUtils::ConsoleThread::AddCommand(&renderStrategyCmd);
 
 
-	DebugUtils::DebugConsole::Command_Structure testStart =
-	{
-		this,
-		[](void* userData, int argc, char** argv) {
-
-		auto& renderer = *(Renderer*)userData;
-		int res;
-		char* filename = "log.log";
-		DebugUtils::GetArg("-o", &filename, argc, argv);
-		res = renderer._StartTest(filename);
-
-		if (res == -1)
-			printf("An error occured!\n");
-		else
-			printf("Test Started... Output will be saved to: %s\n", filename);
-
-
-
-
-
-	},
-		[](void* userData, int argc, char** argv) {
-		printf("Usage: Measure the current rendering technique.\n");
-		printf("\t-o, specify the output file.\n");
-
-	},
-		"test",
-		"Starts the test sequence."
-	};
-
-
-	DebugUtils::ConsoleThread::AddCommand(&testStart);
 
 }
 
@@ -349,29 +339,23 @@ Renderer::~Renderer()
 	VulkanHelpers::DestroyDebugReportCallbackEXT(_instance, _debugCallback, nullptr);
 	vkDestroyInstance(_instance, nullptr);
 }
-int Renderer::_StartTest(const char * outfile)
+int Renderer::StartTest()
 {
-	out.open(outfile, std::ios::ate);
-	if (!out.is_open())
-		return -1;
+	
 	_frameCount = 0;
 	_frameTimes = 0.0f;
 	_testRunning = true;
 	return 0;
 }
 
-void Renderer::_EndTest()
+float Renderer::EndTest()
 {
-	if (out.is_open())
-	{
-		float avgTime = _frameTimes / _frameCount;
-		out << avgTime << endl;
-		out.close();
-		printf("\n Test complete, Average frametime was: %f\n", avgTime);
-	}
+
+	float avgTime = _frameTimes / _frameCount;
 
 	_frameCount = 0;
 	_testRunning = false;
+	return avgTime;
 }
 
 void Renderer::Render(void)
@@ -382,6 +366,8 @@ void Renderer::Render(void)
 	//printf("GPU Time: %f\n", _gpuTimer->GetTime(0));
 
 	// Begin rendering stuff while we potentially wait for swapchain image
+
+	_vertexBufferHandler->FlushBuffer(VertexType::Translation);
 
 	(*this.*_currentRenderStrategy)();
 
@@ -403,10 +389,6 @@ void Renderer::Render(void)
 	{
 		_frameTimes += _timer.GetTime("Frame");
 		_frameCount++;
-		if (_frameCount > 100)
-		{
-			_EndTest();
-		}
 	}
 	
 }
@@ -691,7 +673,7 @@ const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationH
 	pushConstants.PositionOffset = get<0>(_meshes[mesh]);
 	pushConstants.TexcoordOffset = get<1>(_meshes[mesh]);
 	pushConstants.NormalOffset = get<2>(_meshes[mesh]);
-	pushConstants.Translation = translation;
+	pushConstants.Translation = get<0>(_translationOffsets[translation]);
 	pushConstants.Texture = texture;
 	_vertexBufferHandler->CreateBuffer(&pushConstants, 8, VertexType::Index);
 
@@ -699,6 +681,12 @@ const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationH
 	s.vertexCount = get<3>(_meshes[mesh]).NumFace * 3;
 	s.instanceCount = 1;
 	_vertexBufferHandler->CreateBuffer(&s, 1, VertexType::IndirectBuffer);
+}
+
+const void Renderer::UpdateTranslation(const DirectX::XMMATRIX & translation, TranslationHandle translationHandle)
+{
+	XMStoreFloat4x4(&_translations[get<1>(_translationOffsets[translationHandle])], translation);
+	_vertexBufferHandler->Update((void*)&XMMatrixTranspose(translation), 1, VertexType::Translation, get<0>(_translationOffsets[translationHandle]));
 }
 
 void Renderer::SetViewMatrix(const XMMATRIX & view)
@@ -750,6 +738,17 @@ const void Renderer::FrustumCull(VkCommandBuffer & buffer, uint32_t start, uint3
 	
 	}
 	return void();
+}
+
+const void Renderer::RecordDrawCalls(VkCommandBuffer & buffer, uint32_t start, uint32_t count) const
+{
+	for (auto i = start; i < start + count; i++)
+	{
+		auto& meshHandle = get<0>(_renderMeshes[i]);
+		const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
+		vkCmdDraw(buffer, meshData.NumFace * 3, 1, 0, i);
+	}
+
 }
 
 void Renderer::_UpdateViewProjection()
@@ -807,7 +806,7 @@ void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord
 {
 	auto makeRenderPass = [this, cmdBuf, rerecord](VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)
 	{
-		if (_doCulling && rerecord)
+		if ((_doCulling || _doThreadedRecord) && rerecord)
 		{
 			vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
@@ -830,7 +829,10 @@ void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord
 
 				vkCmdBindDescriptorSets(_secBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
 
-				threads[i] = std::thread(FrustumCullingThread, &_secBuffers[i], this, meshesPerThread * i, meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? _renderMeshes.size() % meshesPerThread : 0));
+				if(_doCulling)
+					threads[i] = std::thread(FrustumCullingThread, &_secBuffers[i], this, meshesPerThread * i, meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? _renderMeshes.size() % meshesPerThread : 0));
+				else
+					threads[i] = std::thread(RecordDrawCallsThread, &_secBuffers[i], this, meshesPerThread * i, meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? _renderMeshes.size() % meshesPerThread : 0));
 			}
 			for (int i = 0; i < NUM_SEC_BUFFERS; i++)
 			{
@@ -845,6 +847,7 @@ void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord
 		else
 		{
 			vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
 
 			vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
 			vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
@@ -871,7 +874,8 @@ void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord
 
 void Renderer::_RenderIndirectRecord(void)
 {
-	_vertexBufferHandler->FlushIndirectData();
+	//_vertexBufferHandler->FlushBuffer(VertexType::Translation);
+	_vertexBufferHandler->FlushBuffer(VertexType::IndirectBuffer);
 
 	_RecordIndirectCmdBuffer(_cmdBuffer, true);
 
@@ -890,7 +894,8 @@ void Renderer::_RenderIndirectRecord(void)
 
 void Renderer::_RenderIndirectResubmit(void)
 {
-	_vertexBufferHandler->FlushIndirectData();
+	//_vertexBufferHandler->FlushBuffer(VertexType::Translation);
+	_vertexBufferHandler->FlushBuffer(VertexType::IndirectBuffer);
 
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1146,7 +1151,7 @@ const void Renderer::_CreateSwapChain()
 		bestFormat = supportedFormats[0];
 		for (const auto& i : supportedFormats)
 		{
-			if (i.format == VK_FORMAT_B8G8R8A8_UNORM && i.format == VK_COLORSPACE_SRGB_NONLINEAR_KHR)
+			if (i.format == VK_FORMAT_B8G8R8A8_UNORM && i.colorSpace == VK_COLORSPACE_SRGB_NONLINEAR_KHR)
 			{
 				bestFormat = i;
 				break;
