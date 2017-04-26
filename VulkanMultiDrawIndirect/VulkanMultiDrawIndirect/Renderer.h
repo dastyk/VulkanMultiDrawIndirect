@@ -72,6 +72,7 @@ private:
 	void _RenderIndirectRecord(void);
 	void _RenderIndirectResubmit(void);
 
+	void _SubmitCmdBuffer(VkCommandBuffer& cmdBuf, VkQueue& queue);
 
 	void _BlitSwapchain(void);
 	const void _CreateSurface(HWND hwnd);

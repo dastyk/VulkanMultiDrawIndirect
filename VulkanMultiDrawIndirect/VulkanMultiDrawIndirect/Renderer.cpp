@@ -367,6 +367,7 @@ void Renderer::Render(void)
 
 	// Begin rendering stuff while we potentially wait for swapchain image
 
+	// Flush the translations on the host to the gpu
 	_vertexBufferHandler->FlushBuffer(VertexType::Translation);
 
 	(*this.*_currentRenderStrategy)();
@@ -1014,6 +1015,21 @@ void Renderer::_RenderIndirectResubmit(void)
 	submitInfo.signalSemaphoreCount = 0;
 	submitInfo.pSignalSemaphores = nullptr;
 	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+}
+
+void Renderer::_SubmitCmdBuffer(VkCommandBuffer & cmdBuf, VkQueue & queue)
+{
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.pNext = nullptr;
+	submitInfo.waitSemaphoreCount = 0;
+	submitInfo.pWaitSemaphores = nullptr;
+	submitInfo.pWaitDstStageMask = nullptr;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &cmdBuf;
+	submitInfo.signalSemaphoreCount = 0;
+	submitInfo.pSignalSemaphores = nullptr;
+	vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
 }
 
 // Blits the content of the offscreen buffer to the swapchain image before
