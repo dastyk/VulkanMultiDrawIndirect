@@ -12,6 +12,7 @@
 #include <DirectXCollision.h>
 #include <fstream>
 #include "CPUTimer.h"
+#include <functional>
 
 #pragma comment(lib, "vulkan-1.lib")
 
@@ -65,12 +66,13 @@ private:
 
 
 
-	void _RenderSceneTraditional(void);
+	void _RenderTraditionalRecord(void);
+	void _RenderTraditionalResubmit(void);
 	void _RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord);
-	void _RecordIndirectCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord);
-	void _RenderSceneTraditionalResubmit();
 	void _RenderIndirectRecord(void);
 	void _RenderIndirectResubmit(void);
+	void _RecordIndirectCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord);
+	void _RecordCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord, std::function<void(VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)> makeRenderPass);
 
 	void _SubmitCmdBuffer(VkCommandBuffer& cmdBuf, VkQueue& queue);
 

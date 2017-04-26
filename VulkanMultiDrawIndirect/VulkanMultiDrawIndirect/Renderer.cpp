@@ -28,7 +28,7 @@ const void RecordDrawCallsThread(VkCommandBuffer* buffer, const Renderer* render
 
 
 
-Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderSceneTraditional), _doThreadedRecord(true), _doCulling(true), _testRunning(false)
+Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderTraditionalRecord), _doThreadedRecord(true), _doCulling(true), _testRunning(false)
 {
 
 	/************Create Instance*************/
@@ -244,14 +244,14 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 		{
 			if (DebugUtils::GetArg("-r", nullptr, argc, argv)) // Traditional
 			{
-				r->_currentRenderStrategy = &Renderer::_RenderSceneTraditional;
+				r->_currentRenderStrategy = &Renderer::_RenderTraditionalRecord;
 				return;
 			}
 			else if (DebugUtils::GetArg("-s", nullptr, argc, argv)) // Traditional resubmit
 			{
 				r->_RecordTraditionalCmdBuffer(r->_traditionalCmdB, false);
 
-				r->_currentRenderStrategy = &Renderer::_RenderSceneTraditionalResubmit;
+				r->_currentRenderStrategy = &Renderer::_RenderTraditionalResubmit;
 				return;
 			}
 		}
@@ -769,7 +769,109 @@ void Renderer::_UpdateViewProjection()
 	vkQueueWaitIdle(_queue);
 }
 
+// Render the scene in a traditional manner, i.e. rerecord the draw calls to
+// work with a dynamic scene.
+void Renderer::_RenderTraditionalRecord(void)
+{
+	_RecordTraditionalCmdBuffer(_cmdBuffer, true);
 
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.pNext = nullptr;
+	submitInfo.waitSemaphoreCount = 0;
+	submitInfo.pWaitSemaphores = nullptr;
+	submitInfo.pWaitDstStageMask = nullptr;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &_cmdBuffer;
+	submitInfo.signalSemaphoreCount = 0;
+	submitInfo.pSignalSemaphores = nullptr;
+	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+}
+
+void Renderer::_RenderTraditionalResubmit(void)
+{
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.pNext = nullptr;
+	submitInfo.waitSemaphoreCount = 0;
+	submitInfo.pWaitSemaphores = nullptr;
+	submitInfo.pWaitDstStageMask = nullptr;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &_traditionalCmdB;
+	submitInfo.signalSemaphoreCount = 0;
+	submitInfo.pSignalSemaphores = nullptr;
+	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+}
+
+void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord)
+{
+	auto makeRenderPass = [this, cmdBuf, rerecord](VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)
+	{
+		if ((_doCulling || _doThreadedRecord) && rerecord)
+		{
+			vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+
+			std::thread threads[NUM_SEC_BUFFERS];
+
+			VkCommandBufferInheritanceInfo ini = {};
+			ini.renderPass = _renderPass;
+			ini.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+			ini.framebuffer = _framebuffer;
+
+			auto meshesPerThread = _renderMeshes.size() / NUM_SEC_BUFFERS;
+
+			for (int i = 0; i < NUM_SEC_BUFFERS; i++)
+			{
+				VkCommandBufferUsageFlags usageFlags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+				VulkanHelpers::BeginCommandBuffer(_secBuffers[i], usageFlags, &ini);
+				vkCmdBindPipeline(_secBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+				vkCmdSetViewport(_secBuffers[i], 0, 1, &viewport);
+				vkCmdSetScissor(_secBuffers[i], 0, 1, &scissor);
+
+				vkCmdBindDescriptorSets(_secBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
+
+				if(_doCulling)
+					threads[i] = std::thread(FrustumCullingThread, &_secBuffers[i], this, meshesPerThread * i, meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? _renderMeshes.size() % meshesPerThread : 0));
+				else
+					threads[i] = std::thread(RecordDrawCallsThread, &_secBuffers[i], this, meshesPerThread * i, meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? _renderMeshes.size() % meshesPerThread : 0));
+			}
+			for (int i = 0; i < NUM_SEC_BUFFERS; i++)
+			{
+				threads[i].join();
+				vkEndCommandBuffer(_secBuffers[i]);
+			}
+
+			vkCmdExecuteCommands(cmdBuf, NUM_SEC_BUFFERS, _secBuffers);
+
+			vkCmdEndRenderPass(cmdBuf);
+		}
+		else
+		{
+			vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+
+			vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+			vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
+			vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
+			vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
+
+			uint32_t firstInstance = 0; // This is used to generate offsets for the shader similarly to DrawID for indirect call
+			for (auto& mesh : _renderMeshes)
+			{
+				auto& meshHandle = get<0>(mesh);
+
+				const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
+				vkCmdDraw(cmdBuf, meshData.NumFace * 3, 1, 0, firstInstance);
+
+				firstInstance++;
+			}
+
+			vkCmdEndRenderPass(cmdBuf);
+		}
+	};
+
+	_RecordCmdBuffer(cmdBuf, rerecord, makeRenderPass);
+}
 
 void Renderer::_RenderIndirectRecord(void)
 {
@@ -791,217 +893,9 @@ void Renderer::_RenderIndirectRecord(void)
 	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
 }
 
-// Render the scene in a traditional manner, i.e. rerecord the draw calls to
-// work with a dynamic scene.
-void Renderer::_RenderSceneTraditional(void)
-{
-	_RecordTraditionalCmdBuffer(_cmdBuffer, true);
-
-	VkSubmitInfo submitInfo = {};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.pNext = nullptr;
-	submitInfo.waitSemaphoreCount = 0;
-	submitInfo.pWaitSemaphores = nullptr;
-	submitInfo.pWaitDstStageMask = nullptr;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &_cmdBuffer;
-	submitInfo.signalSemaphoreCount = 0;
-	submitInfo.pSignalSemaphores = nullptr;
-	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
-}
-
-void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord)
-{
-	VkCommandBufferBeginInfo commandBufBeginInfo = {};
-	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	commandBufBeginInfo.pNext = nullptr;
-	commandBufBeginInfo.flags = rerecord ? VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT : 0;
-	commandBufBeginInfo.pInheritanceInfo = nullptr;
-
-	vkBeginCommandBuffer(cmdBuf, &commandBufBeginInfo);
-
-	_gpuTimer->Start(cmdBuf, 0);
-
-	// Do the actual rendering
-
-	array<VkClearValue, 2> clearValues = {};
-	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
-	clearValues[1].depthStencil = { 1.0f, 0 };
-
-	VkRenderPassBeginInfo beginInfo = {};
-	beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	beginInfo.pNext = nullptr;
-	beginInfo.renderPass = _renderPass;
-	beginInfo.framebuffer = _framebuffer;
-	beginInfo.renderArea = { 0, 0, _swapchainExtent.width, _swapchainExtent.height };
-	beginInfo.clearValueCount = clearValues.size();
-	beginInfo.pClearValues = clearValues.data();
-
-	VkViewport viewport = {};
-	viewport.x = 0.0f;
-	viewport.y = 0.0f;
-	viewport.width = _swapchainExtent.width;
-	viewport.height = _swapchainExtent.height;
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-
-	VkRect2D scissor = {};
-	scissor.offset = { 0, 0 };
-	scissor.extent = _swapchainExtent;
-
-	if ((_doCulling || _doThreadedRecord) && rerecord)
-
-	{
-		vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
-
-		std::thread threads[NUM_SEC_BUFFERS];
-
-		VkCommandBufferInheritanceInfo ini = {};
-		ini.renderPass = _renderPass;
-		ini.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
-		ini.framebuffer = _framebuffer;
-
-		auto meshesPerThread = _renderMeshes.size() / NUM_SEC_BUFFERS;
-
-		for (int i = 0; i < NUM_SEC_BUFFERS; i++)
-		{
-			VkCommandBufferUsageFlags usageFlags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
-			if (rerecord)
-			{
-				usageFlags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-			}
-			VulkanHelpers::BeginCommandBuffer(_secBuffers[i], usageFlags, &ini);
-			vkCmdBindPipeline(_secBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
-			vkCmdSetViewport(_secBuffers[i], 0, 1, &viewport);
-			vkCmdSetScissor(_secBuffers[i], 0, 1, &scissor);
-
-			vkCmdBindDescriptorSets(_secBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
-
-			if(_doCulling)
-				threads[i] = std::thread(FrustumCullingThread, &_secBuffers[i], this, meshesPerThread * i, meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? _renderMeshes.size() % meshesPerThread : 0));
-			else
-				threads[i] = std::thread(RecordDrawCallsThread, &_secBuffers[i], this, meshesPerThread * i, meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? _renderMeshes.size() % meshesPerThread : 0));
-		}
-		for (int i = 0; i < NUM_SEC_BUFFERS; i++)
-		{
-			threads[i].join();
-			vkEndCommandBuffer(_secBuffers[i]);
-		}
-
-		vkCmdExecuteCommands(cmdBuf, NUM_SEC_BUFFERS, _secBuffers);
-	}
-	else
-	{
-		vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
-		vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
-		vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
-		vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
-		vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
-
-		uint32_t firstInstance = 0; // This is used to generate offsets for the shader similarly to DrawID for indirect call
-		for (auto& mesh : _renderMeshes)
-		{
-			auto& meshHandle = get<0>(mesh);
-
-			const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
-			vkCmdDraw(cmdBuf, meshData.NumFace * 3, 1, 0, firstInstance);
-
-			firstInstance++;
-		}
-	}
-
-	vkCmdEndRenderPass(cmdBuf);
-
-	// TODO: As of now there is no synchronization point between rendering to
-	// the offscreen buffer and using that image as blit source later. At the
-	// place of this comment we could probably issue an event that is waited on
-	// in the blit buffer before blitting to make sure rendering is complete.
-	// Don't forget to reset the event when we have waited on it.
-
-	_gpuTimer->End(cmdBuf, 0);
-
-	vkEndCommandBuffer(cmdBuf);
-}
-
-void Renderer::_RecordIndirectCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord)
-{
-	VkCommandBufferBeginInfo commandBufBeginInfo = {};
-	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	commandBufBeginInfo.pNext = nullptr;
-	commandBufBeginInfo.flags = rerecord ? VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT : 0;
-	commandBufBeginInfo.pInheritanceInfo = nullptr;
-
-	vkBeginCommandBuffer(cmdBuf, &commandBufBeginInfo);
-
-	_gpuTimer->Start(cmdBuf, 0);
-
-	// Do the actual rendering
-
-	array<VkClearValue, 2> clearValues = {};
-	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
-	clearValues[1].depthStencil = { 1.0f, 0 };
-
-	VkRenderPassBeginInfo beginInfo = {};
-	beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	beginInfo.pNext = nullptr;
-	beginInfo.renderPass = _renderPass;
-	beginInfo.framebuffer = _framebuffer;
-	beginInfo.renderArea = { 0, 0, _swapchainExtent.width, _swapchainExtent.height };
-	beginInfo.clearValueCount = clearValues.size();
-	beginInfo.pClearValues = clearValues.data();
-	vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-	VkViewport viewport = {};
-	viewport.x = 0.0f;
-	viewport.y = 0.0f;
-	viewport.width = _swapchainExtent.width;
-	viewport.height = _swapchainExtent.height;
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-
-	VkRect2D scissor = {};
-	scissor.offset = { 0, 0 };
-	scissor.extent = _swapchainExtent;
-
-	vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _indirectPipeline);
-	vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
-	vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
-
-	vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
-
-	vkCmdDrawIndirect(cmdBuf, _vertexBufferHandler->GetBuffer(VertexType::IndirectBuffer), 0, _renderMeshes.size(), sizeof(VkDrawIndirectCommand));
-
-	vkCmdEndRenderPass(cmdBuf);
-
-	// TODO: As of now there is no synchronization point between rendering to
-	// the offscreen buffer and using that image as blit source later. At the
-	// place of this comment we could probably issue an event that is waited on
-	// in the blit buffer before blitting to make sure rendering is complete.
-	// Don't forget to reset the event when we have waited on it.
-
-	_gpuTimer->End(cmdBuf, 0);
-
-	vkEndCommandBuffer(cmdBuf);
-}
-
-void Renderer::_RenderSceneTraditionalResubmit()
-{
-	VkSubmitInfo submitInfo = {};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.pNext = nullptr;
-	submitInfo.waitSemaphoreCount = 0;
-	submitInfo.pWaitSemaphores = nullptr;
-	submitInfo.pWaitDstStageMask = nullptr;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &_traditionalCmdB;
-	submitInfo.signalSemaphoreCount = 0;
-	submitInfo.pSignalSemaphores = nullptr;
-	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
-}
-
-
 void Renderer::_RenderIndirectResubmit(void)
 {
+	//_vertexBufferHandler->FlushBuffer(VertexType::Translation);
 	_vertexBufferHandler->FlushBuffer(VertexType::IndirectBuffer);
 
 	VkSubmitInfo submitInfo = {};
@@ -1017,19 +911,76 @@ void Renderer::_RenderIndirectResubmit(void)
 	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
 }
 
-void Renderer::_SubmitCmdBuffer(VkCommandBuffer & cmdBuf, VkQueue & queue)
+void Renderer::_RecordIndirectCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord)
 {
-	VkSubmitInfo submitInfo = {};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.pNext = nullptr;
-	submitInfo.waitSemaphoreCount = 0;
-	submitInfo.pWaitSemaphores = nullptr;
-	submitInfo.pWaitDstStageMask = nullptr;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &cmdBuf;
-	submitInfo.signalSemaphoreCount = 0;
-	submitInfo.pSignalSemaphores = nullptr;
-	vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+	auto makeRenderPass = [this, cmdBuf](VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)
+	{
+		vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _indirectPipeline);
+		vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
+		vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
+
+		vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
+
+		vkCmdDrawIndirect(cmdBuf, _vertexBufferHandler->GetBuffer(VertexType::IndirectBuffer), 0, _renderMeshes.size(), sizeof(VkDrawIndirectCommand));
+
+		vkCmdEndRenderPass(cmdBuf);
+	};
+
+	_RecordCmdBuffer(cmdBuf, rerecord, makeRenderPass);
+}
+
+void Renderer::_RecordCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord, function<void(VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)> makeRenderPass)
+{
+	VkCommandBufferBeginInfo commandBufBeginInfo = {};
+	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	commandBufBeginInfo.pNext = nullptr;
+	commandBufBeginInfo.flags = rerecord ? VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT : 0;
+	commandBufBeginInfo.pInheritanceInfo = nullptr;
+
+	vkBeginCommandBuffer(cmdBuf, &commandBufBeginInfo);
+
+	_gpuTimer->Start(cmdBuf, 0);
+
+	// Do the actual rendering
+
+	array<VkClearValue, 2> clearValues = {};
+	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
+	clearValues[1].depthStencil = { 1.0f, 0 };
+
+	VkRenderPassBeginInfo beginInfo = {};
+	beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	beginInfo.pNext = nullptr;
+	beginInfo.renderPass = _renderPass;
+	beginInfo.framebuffer = _framebuffer;
+	beginInfo.renderArea = { 0, 0, _swapchainExtent.width, _swapchainExtent.height };
+	beginInfo.clearValueCount = clearValues.size();
+	beginInfo.pClearValues = clearValues.data();
+
+	VkViewport viewport = {};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = _swapchainExtent.width;
+	viewport.height = _swapchainExtent.height;
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	VkRect2D scissor = {};
+	scissor.offset = { 0, 0 };
+	scissor.extent = _swapchainExtent;
+
+	makeRenderPass(beginInfo, viewport, scissor);
+
+	// TODO: As of now there is no synchronization point between rendering to
+	// the offscreen buffer and using that image as blit source later. At the
+	// place of this comment we could probably issue an event that is waited on
+	// in the blit buffer before blitting to make sure rendering is complete.
+	// Don't forget to reset the event when we have waited on it.
+
+	_gpuTimer->End(cmdBuf, 0);
+
+	vkEndCommandBuffer(cmdBuf);
 }
 
 // Blits the content of the offscreen buffer to the swapchain image before
