@@ -63,12 +63,12 @@ private:
 
 
 
-	void _RenderSceneTraditional(void);
+	void _RenderTraditionalRecord(void);
+	void _RenderTraditionalResubmit(void);
 	void _RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord);
-	void _RecordIndirectCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord);
-	void _RenderSceneTraditionalResubmit();
 	void _RenderIndirectRecord(void);
 	void _RenderIndirectResubmit(void);
+	void _RecordIndirectCmdBuffer(VkCommandBuffer cmdBuf, bool rerecord);
 
 
 	void _BlitSwapchain(void);
