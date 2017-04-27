@@ -34,17 +34,15 @@ struct Frustum
 };
 
 
-layout(set = 0, binding = INDIRECT_BUFFER)
-{
+layout(set = 0, binding = INDIRECT_BUFFER) buffer IndirectBuffer {
 	Indirect g_IndirectCalls[];
 };
 
-layout(set = 0, binding = BOUNDING_BUFFER)
-{
+layout(set = 0, binding = BOUNDING_BUFFER) buffer BoundingBuffer {
 	Bounding g_BoundingBoxes[];
 };
 
-layout(set = 0, binding = TRANSLATION_BUFFER) uniform FrustumConstants {
+layout(set = 0, binding = TRANSLATION_BUFFER) uniform Translation {
 	mat4 g_Translations[];
 };
 
