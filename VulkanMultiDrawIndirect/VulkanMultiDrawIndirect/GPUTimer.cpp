@@ -2,7 +2,7 @@
 
 
 
-GPUTimer::GPUTimer(VkDevice device, uint8_t queryLatency, float timestampPeriod) : _device(device), _maxCounters(20), _queryLatency(queryLatency), _freq(1e-6*(double)timestampPeriod)
+GPUTimer::GPUTimer(VkDevice device, uint8_t queryLatency, float timestampPeriod) : _device(device), _maxCounters(1), _queryLatency(queryLatency), _freq(1e-6*(double)timestampPeriod)
 {
 	auto& info = VulkanHelpers::MakeQueryPoolCreateInfo(VK_QUERY_TYPE_TIMESTAMP, _queryLatency*_maxCounters*2);
 	VulkanHelpers::CreateQueryPool(_device, &info, &_pool);

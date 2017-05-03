@@ -58,6 +58,7 @@ public:
 	const void FrustumCull(VkCommandBuffer& buffer, uint32_t start, uint32_t count) const;
 	const void RecordDrawCalls(VkCommandBuffer& buffer, uint32_t start, uint32_t count) const;
 private:
+
 	typedef void(Renderer::*RenderStrategyFP)();
 
 	void _UpdateViewProjection();
