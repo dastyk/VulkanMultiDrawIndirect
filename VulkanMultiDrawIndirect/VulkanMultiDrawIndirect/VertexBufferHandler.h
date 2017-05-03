@@ -33,6 +33,9 @@ class VertexBufferHandler
 		VkBufferView view;
 		uint32_t maxCount;
 		uint32_t firstFree;
+
+		// CPU-side store of the buffer. Will be flushed to GPU
+		char* memoryHost = nullptr;
 	};
 
 
@@ -49,8 +52,10 @@ public:
 	void WriteDescriptorSets(VkDescriptorSet descSet, uint32_t bindingOffset);
 	VkBuffer GetBuffer(VertexType type);
 
+	void FlushBuffer(VertexType type);
+	void Update(void * data, uint32_t numElements, VertexType type, uint32_t offset);
 private:
-	const void _CreateBufferSet(VertexType type, uint32_t maxElements);
+	const void _CreateBufferSet(VertexType type, uint32_t maxElements, bool hostVis = false);
 private:
 	std::map<VertexType, BufferSet>_bufferSets;
 

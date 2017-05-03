@@ -52,7 +52,7 @@ const float CPUTimer::GetTime(const std::string & name)
 	if (profile.QueryFinished == TRUE)
 	{
 
-		profile.QueryFinished = FALSE;
+	//	profile.QueryFinished = FALSE;
 
 		if (profile.timer != nullptr)
 		{
@@ -60,7 +60,7 @@ const float CPUTimer::GetTime(const std::string & name)
 			// Get the query data
 			UINT64 startTime = 0;
 
-			float time = profile.timer->TotalTime();
+			float time = profile.timer->TotalTimeMS();
 			return time;
 		}
 	}
@@ -95,12 +95,12 @@ const float CPUTimer::GetAVGTPF(const std::string & name)
 	{
 
 		// Get the query data
-		profile._frameTime += profile.timer->TotalTime();
+		profile._frameTime += profile.timer->TotalTimeMS();
 		profile._frameCount++;
 
 
 		float time = profile._ltime*1000.0f;
-		if ((_timer.TotalTime() - profile._timeElapsed) >= 1.0f)
+		if ((_timer.TotalTimeMS() - profile._timeElapsed) >= 1.0f)
 		{
 			profile._ltime = profile._frameTime / (float)profile._frameCount;
 			profile._frameTime = 0.0f;

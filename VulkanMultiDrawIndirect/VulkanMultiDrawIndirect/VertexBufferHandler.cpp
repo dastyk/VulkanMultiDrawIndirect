@@ -7,8 +7,8 @@ VertexBufferHandler::VertexBufferHandler(VkPhysicalDevice phydev, VkDevice devic
 	_CreateBufferSet(VertexType::Position, 1000000);
 	_CreateBufferSet(VertexType::TexCoord, 1000000);
 	_CreateBufferSet(VertexType::Normal, 1000000);
-	_CreateBufferSet(VertexType::Translation, 100000);
-	_CreateBufferSet(VertexType::IndirectBuffer, 100000);
+	_CreateBufferSet(VertexType::Translation, 100000, true);
+	_CreateBufferSet(VertexType::IndirectBuffer, 100000, true);
 	_CreateBufferSet(VertexType::Index, 100000);
 	_CreateBufferSet(VertexType::Bounding, 100000);
 }
@@ -22,7 +22,10 @@ VertexBufferHandler::~VertexBufferHandler()
 			vkDestroyBufferView(_device, set.second.view, nullptr);
 		vkDestroyBuffer(_device, set.second.buffer, nullptr);
 		vkFreeMemory(_device, set.second.memory, nullptr);
+		delete set.second.memoryHost;
 	}
+
+
 }
 
 const uint32_t VertexBufferHandler::CreateBuffer(void* data, uint32_t numElements, VertexType type)
@@ -36,31 +39,39 @@ const uint32_t VertexBufferHandler::CreateBuffer(void* data, uint32_t numElement
 	uint32_t offset = bufferSet.firstFree;
 	bufferSet.firstFree += numElements;
 
-	/* Create a staging buffer*/
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingMemory;
-	VulkanHelpers::CreateBuffer(_phydev, _device, totalSize,
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
-		&stagingBuffer, &stagingMemory);
+	if (!bufferSet.memoryHost)
+	{
+		/* Create a staging buffer*/
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingMemory;
+		VulkanHelpers::CreateBuffer(_phydev, _device, totalSize,
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+			&stagingBuffer, &stagingMemory);
 
-	/* Copy data to staging buffer*/
-	void* srcData;
-	VulkanHelpers::MapMemory(_device, stagingMemory, &srcData, totalSize);
-	memcpy(srcData, data, totalSize);
-	vkUnmapMemory(_device, stagingMemory);
-	
-	/*Copy data to the actual buffer*/
-	VulkanHelpers::BeginCommandBuffer(_cmdBuffer);
-	VulkanHelpers::CopyDataBetweenBuffers(_cmdBuffer, stagingBuffer, 0, bufferSet.buffer, offset*byteWidth, totalSize);
-	vkEndCommandBuffer(_cmdBuffer);
-	auto& sInfo = VulkanHelpers::MakeSubmitInfo(1, &_cmdBuffer);
-	VulkanHelpers::QueueSubmit(_queue, 1, &sInfo);
-	vkQueueWaitIdle(_queue);
+		/* Copy data to staging buffer*/
+		void* srcData;
+		VulkanHelpers::MapMemory(_device, stagingMemory, &srcData, totalSize);
+		memcpy(srcData, data, totalSize);
+		vkUnmapMemory(_device, stagingMemory);
 
-	/* Free staging buffer*/
-	vkDestroyBuffer(_device, stagingBuffer, nullptr);
-	vkFreeMemory(_device, stagingMemory, nullptr);
+		/*Copy data to the actual buffer*/
+		VulkanHelpers::BeginCommandBuffer(_cmdBuffer);
+		VulkanHelpers::CopyDataBetweenBuffers(_cmdBuffer, stagingBuffer, 0, bufferSet.buffer, offset*byteWidth, totalSize);
+		vkEndCommandBuffer(_cmdBuffer);
+		auto& sInfo = VulkanHelpers::MakeSubmitInfo(1, &_cmdBuffer);
+		VulkanHelpers::QueueSubmit(_queue, 1, &sInfo);
+		vkQueueWaitIdle(_queue);
+
+		/* Free staging buffer*/
+		vkDestroyBuffer(_device, stagingBuffer, nullptr);
+		vkFreeMemory(_device, stagingMemory, nullptr);
+	}
+	// Indirect buffer
+	else
+	{
+		memcpy(bufferSet.memoryHost + offset*byteWidth, data, totalSize);
+	}
 
 	return offset;
 
@@ -133,7 +144,38 @@ VkBuffer VertexBufferHandler::GetBuffer(VertexType type)
 	return _bufferSets[type].buffer;
 }
 
-const void VertexBufferHandler::_CreateBufferSet(VertexType type, uint32_t maxElements)
+void VertexBufferHandler::FlushBuffer(VertexType type)
+{
+	BufferSet& bufset = _bufferSets[type];
+	auto byteWidth = TypeSize(type);
+	void* data = nullptr;
+	vkMapMemory(_device, bufset.memory, 0, bufset.firstFree * byteWidth, 0, &data);
+	memcpy(data, bufset.memoryHost, bufset.firstFree * byteWidth);
+
+	VkMappedMemoryRange range = {};
+	range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+	range.pNext = nullptr;
+	range.memory = bufset.memory;
+	range.offset = 0;
+	range.size = bufset.firstFree * byteWidth;
+
+	vkFlushMappedMemoryRanges(_device, 1, &range);
+
+	vkUnmapMemory(_device, bufset.memory);
+}
+
+void VertexBufferHandler::Update(void * data, uint32_t numElements, VertexType type, uint32_t offset)
+{
+	BufferSet& bufset = _bufferSets[type];
+	auto byteWidth = TypeSize(type);
+	auto byteOffset = byteWidth * offset;
+
+	memcpy(bufset.memoryHost + byteOffset, data, numElements*byteWidth);
+
+
+}
+
+const void VertexBufferHandler::_CreateBufferSet(VertexType type, uint32_t maxElements, bool hostVis)
 {
 	auto& set = _bufferSets[type];
 	auto byteWidth = TypeSize(type);
@@ -158,20 +200,26 @@ const void VertexBufferHandler::_CreateBufferSet(VertexType type, uint32_t maxEl
 	
 	}
 
-	VkBufferUsageFlags flags = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	VkMemoryPropertyFlags memoryFlags = 0;
 	switch (type)
 	{
 	case VertexType::IndirectBuffer:
-		flags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		usageFlags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+		memoryFlags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 		break;
 	default:
-		flags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		usageFlags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		memoryFlags |= hostVis ? VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		break;
 	}
 
 	VulkanHelpers::CreateBuffer(_phydev, _device, size,
-		flags,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		usageFlags, memoryFlags,
 		&set.buffer, &set.memory);
 	
+	if (hostVis)
+	{
+		set.memoryHost = new char[size];
+	}
 }
