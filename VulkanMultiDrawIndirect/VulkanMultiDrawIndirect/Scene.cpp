@@ -99,8 +99,9 @@ const void Scene::Frame(float dt)
 {
 	_timer.TimeStart("Frame");
 
-	for (auto& o : _objects)
+	for (uint32_t i = 0; i < 1000; i++)
 	{
+		auto& o = _objects[rand()%_objects.size()];
 		XMMATRIX t = XMLoadFloat4x4(&o.translation);
 		t *= XMMatrixTranslation((rand() % 200 - 100)/100.0f*dt, (rand() % 200 - 100) / 100.0f*dt, (rand() % 200 - 100) / 100.0f*dt);
 		XMStoreFloat4x4(&o.translation, t);

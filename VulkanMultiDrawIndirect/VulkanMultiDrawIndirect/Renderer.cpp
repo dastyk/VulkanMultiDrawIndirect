@@ -16,6 +16,7 @@ using namespace std;
 
 const void FrustumCullingThread(VkCommandBuffer* buffer, const Renderer* renderer, uint32_t start, uint32_t count)
 {
+
 	renderer->FrustumCull(*buffer, start, count);
 }
 
@@ -739,11 +740,12 @@ const void Renderer::FrustumCull(VkCommandBuffer & buffer, uint32_t start, uint3
 
 	
 	}
+
+
 	return void();
 }
 
-const void Renderer::RecordDrawCalls(VkCommandBuffer & buffer, uint32_t start, uint32_t count) const
-{
+const void Renderer::RecordDrawCalls(VkCommandBuffer & buffer, uint32_t start, uint32_t count)const {
 	for (auto i = start; i < start + count; i++)
 	{
 		auto& meshHandle = get<0>(_renderMeshes[i]);
@@ -808,7 +810,7 @@ void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecor
 {
 	auto makeRenderPass = [this, cmdBuf, rerecord](VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)
 	{
-		if ((_doCulling || _doThreadedRecord) && rerecord)
+		if (rerecord && (_doCulling || _doThreadedRecord))
 		{
 			vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
@@ -942,7 +944,7 @@ void Renderer::_RecordCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecord, function
 
 	vkBeginCommandBuffer(cmdBuf, &commandBufBeginInfo);
 
-	_gpuTimer->Start(cmdBuf, 0);
+	//_gpuTimer->Start(cmdBuf, 0);
 
 	// Do the actual rendering
 
@@ -979,7 +981,7 @@ void Renderer::_RecordCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecord, function
 	// in the blit buffer before blitting to make sure rendering is complete.
 	// Don't forget to reset the event when we have waited on it.
 
-	_gpuTimer->End(cmdBuf, 0);
+//	_gpuTimer->End(cmdBuf, 0);
 
 	vkEndCommandBuffer(cmdBuf);
 }
