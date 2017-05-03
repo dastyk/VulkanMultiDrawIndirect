@@ -59,7 +59,11 @@ const void Scene::Init()
 	for (auto& o : _objects)
 		_renderer.Submit(o.mesh, o.texture, o.translationHandle);
 
-
+	_objectOffsetAngles.resize(_objects.size());
+	for (int i = 0; i < _objects.size(); ++i)
+	{
+		_objectOffsetAngles[i] = i * XMConvertToRadians(10.0f);
+	}
 
 	DebugUtils::DebugConsole::Command_Structure testStart =
 	{
@@ -99,13 +103,20 @@ const void Scene::Frame(float dt)
 {
 	_timer.TimeStart("Frame");
 
-	for (uint32_t i = 0; i < 1000; i++)
+	//for (uint32_t i = 0; i < 1000; i++)
+	//{
+	//	auto& o = _objects[rand()%_objects.size()];
+	//	XMMATRIX t = XMLoadFloat4x4(&o.translation);
+	//	t *= XMMatrixTranslation((rand() % 200 - 100)/100.0f*dt, (rand() % 200 - 100) / 100.0f*dt, (rand() % 200 - 100) / 100.0f*dt);
+	//	XMStoreFloat4x4(&o.translation, t);
+	//	_renderer.UpdateTranslation(t, o.translationHandle);
+	//}
+	for (uint32_t i = 0; i < _objects.size(); ++i)
 	{
-		auto& o = _objects[rand()%_objects.size()];
-		XMMATRIX t = XMLoadFloat4x4(&o.translation);
-		t *= XMMatrixTranslation((rand() % 200 - 100)/100.0f*dt, (rand() % 200 - 100) / 100.0f*dt, (rand() % 200 - 100) / 100.0f*dt);
-		XMStoreFloat4x4(&o.translation, t);
-		_renderer.UpdateTranslation(t, o.translationHandle);
+		auto& o = _objects[i];
+		_objectOffsetAngles[i] += XM_2PI * dt;
+		o.translation._42 = 10.0f * sinf(_objectOffsetAngles[i]);
+		_renderer.UpdateTranslation(XMLoadFloat4x4(&o.translation), o.translationHandle);
 	}
 
 
