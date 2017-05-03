@@ -654,7 +654,7 @@ uint32_t Renderer::CreateTexture(const char * path)
 	if (_textures.size() == 1)
 	{
 		std::vector<VkWriteDescriptorSet> wds;
-		for (uint32_t i = 0; i < 2; i++)
+		for (uint32_t i = 0; i < 3; i++)
 		{
 			wds.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, 0, i, 1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, &vkdii, nullptr, nullptr));
 		}
@@ -1777,7 +1777,7 @@ void Renderer::_CreateDescriptorStuff()
 	/* Create the descriptor pool*/
 	std::vector<VkDescriptorPoolSize> _poolSizes;
 	_poolSizes.push_back(
-	{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2 });
+	{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 3 });
 	_poolSizes.push_back(
 	{ VK_DESCRIPTOR_TYPE_SAMPLER, 1 });
 	_poolSizes.push_back(
@@ -1795,7 +1795,7 @@ void Renderer::_CreateDescriptorStuff()
 	bindings.push_back({
 		(uint32_t)bindings.size(),
 		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-		2,
+		3,
 		VK_SHADER_STAGE_FRAGMENT_BIT,
 		nullptr
 	});
