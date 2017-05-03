@@ -699,7 +699,6 @@ const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationH
 	BoundingBox& dxbb = get<4>(_meshes[mesh]);
 	bb.px = dxbb.Center.x; bb.py = dxbb.Center.y; bb.pz = dxbb.Center.z;
 	bb.ex = dxbb.Extents.x; bb.ey = dxbb.Extents.y; bb.ez = dxbb.Extents.z;
-	bb.containedVertices = get<3>(_meshes[mesh]).NumFace * 3;
 	_vertexBufferHandler->CreateBuffer(&bb, 1, VertexType::Bounding);
 
 	VkDrawIndirectCommand s = {};

@@ -33,8 +33,6 @@ class Renderer
 		float padding;
 		float ex, ey, ez;
 		float padding2;
-		uint32_t containedVertices;
-		uint32_t padding3[3];
 	};
 
 	struct GPUFriendlyFrustum
@@ -136,8 +134,7 @@ private:
 	struct GPUCullUniformBuffer
 	{
 		GPUFriendlyFrustum frustum;
-		uint32_t objectCount;
-		uint32_t padding[3];
+
 	};
 	void _CreatePipelineLayout(void);
 	void _CreatePipeline(void);

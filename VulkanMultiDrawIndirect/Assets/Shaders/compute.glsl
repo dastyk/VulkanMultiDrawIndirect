@@ -17,10 +17,6 @@ struct Bounding
 {
 	vec4 pos;
 	vec4 extents;
-	uint containedVertices;
-	uint pad;
-	uint pad2;
-	uint pad3;
 };
 
 struct Frustum
@@ -49,7 +45,6 @@ layout(set = 0, binding = TRANSLATION_BUFFER) buffer Translation {
 
 layout(set = 0, binding = FRUSTUM_BUFFER) uniform FrustumConstants {
 	Frustum g_Frustum;
-	uint g_TotalObjects;
 };
 
 
