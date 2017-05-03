@@ -52,5 +52,12 @@ layout(set = 0, binding = FRUSTUM_BUFFER) uniform FrustumConstants {
 };
 
 void main() {
+	uint index =  gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_NumWorkGroups.x * gl_WorkGroupSize.x;
 
+	if(index % 2 == 1)
+	{
+		g_IndirectCalls[index].instanceCount = 0;
+	
+	}
+	
 }

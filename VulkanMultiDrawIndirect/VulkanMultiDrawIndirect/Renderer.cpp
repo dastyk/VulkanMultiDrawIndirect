@@ -733,6 +733,30 @@ void Renderer::_RenderIndirectRecord(void)
 
 	_gpuTimer->Start(_cmdBuffer, 0);
 
+	//Do culling
+
+
+	vkCmdBindPipeline(_cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, _computePipeline);
+	vkCmdBindDescriptorSets(_cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, _compPipelineLayout, 0, 1, &_compDescSet, 0, nullptr);
+	vkCmdDispatch(_cmdBuffer, _renderMeshes.size(), 1, 1);
+
+	vkEndCommandBuffer(_cmdBuffer);
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.pNext = nullptr;
+	submitInfo.waitSemaphoreCount = 0;
+	submitInfo.pWaitSemaphores = nullptr;
+	submitInfo.pWaitDstStageMask = nullptr;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &_cmdBuffer;
+	submitInfo.signalSemaphoreCount = 0;
+	submitInfo.pSignalSemaphores = nullptr;
+	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(_queue);
+
+	//Culling done
+
+	vkBeginCommandBuffer(_cmdBuffer, &commandBufBeginInfo);
 	// Do the actual rendering
 
 	array<VkClearValue, 2> clearValues = {};
@@ -781,16 +805,7 @@ void Renderer::_RenderIndirectRecord(void)
 
 	vkEndCommandBuffer(_cmdBuffer);
 
-	VkSubmitInfo submitInfo = {};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.pNext = nullptr;
-	submitInfo.waitSemaphoreCount = 0;
-	submitInfo.pWaitSemaphores = nullptr;
-	submitInfo.pWaitDstStageMask = nullptr;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &_cmdBuffer;
-	submitInfo.signalSemaphoreCount = 0;
-	submitInfo.pSignalSemaphores = nullptr;
+
 	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
 }
 
