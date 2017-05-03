@@ -156,9 +156,12 @@ void Scene::_EndTest()
 
 	_frameCount = 0;
 	_testRunning = false;
-	auto rendererAvg = _renderer.EndTest();
-	out << "Total frametime: " << avgTime << ", Renderer: " << rendererAvg << std::endl;
+	float rendererAvgCpu;
+	float rendererAvgGpu;
+	_renderer.EndTest(rendererAvgCpu, rendererAvgGpu);
+
+	out << avgTime << " " << rendererAvgCpu << " " << rendererAvgGpu << std::endl;
 	out.close();
-	printf("\n Test complete, Total frametime: %f, Average frametime in renderer was: %f\n", avgTime, rendererAvg);
+	printf("\nTest complete, Total: %f, Recording: %f, GPU: %f, Recording-GPU: %f\n", avgTime, rendererAvgCpu, rendererAvgGpu, rendererAvgCpu- rendererAvgGpu);
 
 }

@@ -12,17 +12,23 @@
 
 using namespace DirectX;
 using namespace std;
+static bool go = true;
+static bool cull = true;
+SYNCHRONIZATION_BARRIER  barrier;
 
 
-const void FrustumCullingThread(VkCommandBuffer* buffer, const Renderer* renderer, uint32_t start, uint32_t count)
+const void ThreadEntry(VkCommandBuffer* buffer, const Renderer* renderer, uint8_t index)
 {
-
-	renderer->FrustumCull(*buffer, start, count);
-}
-
-const void RecordDrawCallsThread(VkCommandBuffer* buffer, const Renderer* renderer, uint32_t start, uint32_t count)
-{
-	renderer->RecordDrawCalls(*buffer, start, count);
+	while (go)
+	{
+		EnterSynchronizationBarrier(&barrier, SYNCHRONIZATION_BARRIER_FLAGS_NO_DELETE);
+		if(cull)
+			renderer->FrustumCull(*buffer, index);
+		else
+			renderer->RecordDrawCalls(*buffer, index);
+		EnterSynchronizationBarrier(&barrier, SYNCHRONIZATION_BARRIER_FLAGS_NO_DELETE);
+	}
+	
 }
 
 
@@ -31,6 +37,11 @@ const void RecordDrawCallsThread(VkCommandBuffer* buffer, const Renderer* render
 
 Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderTraditionalRecord), _doThreadedRecord(true), _doCulling(true), _testRunning(false)
 {
+
+	InitializeSynchronizationBarrier(&barrier, NUM_SEC_BUFFERS + 1, 100);
+
+	for (uint8_t i = 0; i< NUM_SEC_BUFFERS; i++)
+		 _threads[i] = std::move(std::thread(ThreadEntry, &_secBuffers[i], this, i));
 
 	/************Create Instance*************/
 	const std::vector<const char*> validationLayers = {
@@ -290,7 +301,14 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 
 Renderer::~Renderer()
 {
+
+	for (uint8_t i = 0;i < NUM_SEC_BUFFERS; i++)
+		TerminateThread(_threads[i].native_handle(), 0);
+
 	vkDeviceWaitIdle(_device);
+
+
+
 
 
 	vkDestroyDescriptorSetLayout(_device, _descLayout, nullptr);
@@ -349,23 +367,26 @@ int Renderer::StartTest()
 	return 0;
 }
 
-float Renderer::EndTest()
+void Renderer::EndTest(float & cputTime, float & gputTime)
 {
-
-	float avgTime = _frameTimes / _frameCount;
-
+	cputTime = _frameTimes / _frameCount;
+	gputTime = _gpuFrameTimes / _frameCount;
 	_frameCount = 0;
 	_testRunning = false;
-	return avgTime;
+	_frameTimes = 0.0;
+	_gpuFrameTimes = 0.0;
 }
 
 void Renderer::Render(void)
 {
-	_timer.TimeStart("Frame");
+
+	//_timer.TimeStart("FrameW");
 	vkQueueWaitIdle(_queue);
+//	_timer.TimeEnd("FrameW");
 
-	//printf("GPU Time: %f\n", _gpuTimer->GetTime(0));
+//	printf("%f\n", _timer.GetTime("FrameW"));
 
+	_timer.TimeStart("Frame");
 	// Begin rendering stuff while we potentially wait for swapchain image
 
 	// Flush the translations on the host to the gpu
@@ -373,27 +394,22 @@ void Renderer::Render(void)
 
 	(*this.*_currentRenderStrategy)();
 
-//	_SubmitCmdBuffer(_cmdBuffer, _queue);
 
-	//printf("Finished in: %f", _gpuTimer->GetTime(0));
-
-
-
-
-
+	_timer.TimeEnd("Frame");
 
 	// While the scene is rendering we can get the swapchain image and begin
 	// transitioning it. When it's time to blit we must synchronize to make
 	// sure that the image is finished for us to read. 
 	_BlitSwapchain();
-
-	_timer.TimeEnd("Frame");
+	vkQueueWaitIdle(_queue);
+	
 	if (_testRunning)
 	{
+		_gpuFrameTimes += _gpuTimer->GetTime(0);
 		_frameTimes += _timer.GetTime("Frame");
 		_frameCount++;
 	}
-	
+
 }
 
 Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
@@ -684,6 +700,15 @@ const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationH
 	s.vertexCount = get<3>(_meshes[mesh]).NumFace * 3;
 	s.instanceCount = 1;
 	_vertexBufferHandler->CreateBuffer(&s, 1, VertexType::IndirectBuffer);
+
+
+	auto meshesPerThread = _renderMeshes.size() / NUM_SEC_BUFFERS;
+	for (uint8_t i = 0; i < NUM_SEC_BUFFERS; i++)
+	{
+		_recordOffset[i] = meshesPerThread * i;
+		_toRecord[i] = meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? (meshesPerThread > 0) ? _renderMeshes.size() % meshesPerThread : 0 : 1) ;
+	}
+	
 }
 
 const void Renderer::UpdateTranslation(const DirectX::XMMATRIX & translation, TranslationHandle translationHandle)
@@ -719,10 +744,11 @@ void Renderer::SetProjectionMatrix(const XMMATRIX & projection)
 	_UpdateViewProjection();
 }
 
-const void Renderer::FrustumCull(VkCommandBuffer & buffer, uint32_t start, uint32_t count)const
+const void Renderer::FrustumCull(VkCommandBuffer & buffer, uint8_t index)const
 {
 	BoundingOrientedBox bo;
-
+	auto start = _recordOffset[index];
+	auto count = _toRecord[index];
 	for (auto i = start; i < start + count; i++)
 	{
 		auto& meshHandle = get<0>(_renderMeshes[i]);
@@ -745,7 +771,9 @@ const void Renderer::FrustumCull(VkCommandBuffer & buffer, uint32_t start, uint3
 	return void();
 }
 
-const void Renderer::RecordDrawCalls(VkCommandBuffer & buffer, uint32_t start, uint32_t count)const {
+const void Renderer::RecordDrawCalls(VkCommandBuffer & buffer, uint8_t index)const {
+	auto start = _recordOffset[index];
+	auto count = _toRecord[index];
 	for (auto i = start; i < start + count; i++)
 	{
 		auto& meshHandle = get<0>(_renderMeshes[i]);
@@ -814,15 +842,13 @@ void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecor
 		{
 			vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
-			std::thread threads[NUM_SEC_BUFFERS];
 
 			VkCommandBufferInheritanceInfo ini = {};
 			ini.renderPass = _renderPass;
 			ini.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
 			ini.framebuffer = _framebuffer;
 
-			auto meshesPerThread = _renderMeshes.size() / NUM_SEC_BUFFERS;
-
+		
 			for (int i = 0; i < NUM_SEC_BUFFERS; i++)
 			{
 				VkCommandBufferUsageFlags usageFlags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -832,15 +858,13 @@ void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecor
 				vkCmdSetScissor(_secBuffers[i], 0, 1, &scissor);
 
 				vkCmdBindDescriptorSets(_secBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
-
-				if(_doCulling)
-					threads[i] = std::thread(FrustumCullingThread, &_secBuffers[i], this, meshesPerThread * i, meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? _renderMeshes.size() % meshesPerThread : 0));
-				else
-					threads[i] = std::thread(RecordDrawCallsThread, &_secBuffers[i], this, meshesPerThread * i, meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? _renderMeshes.size() % meshesPerThread : 0));
+				
 			}
+			EnterSynchronizationBarrier(&barrier, SYNCHRONIZATION_BARRIER_FLAGS_NO_DELETE);
+			// Threads are working
+			EnterSynchronizationBarrier(&barrier, SYNCHRONIZATION_BARRIER_FLAGS_NO_DELETE);
 			for (int i = 0; i < NUM_SEC_BUFFERS; i++)
 			{
-				threads[i].join();
 				vkEndCommandBuffer(_secBuffers[i]);
 			}
 
@@ -944,7 +968,7 @@ void Renderer::_RecordCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecord, function
 
 	vkBeginCommandBuffer(cmdBuf, &commandBufBeginInfo);
 
-	//_gpuTimer->Start(cmdBuf, 0);
+	_gpuTimer->Start(cmdBuf, 0);
 
 	// Do the actual rendering
 
@@ -981,7 +1005,7 @@ void Renderer::_RecordCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecord, function
 	// in the blit buffer before blitting to make sure rendering is complete.
 	// Don't forget to reset the event when we have waited on it.
 
-//	_gpuTimer->End(cmdBuf, 0);
+	_gpuTimer->End(cmdBuf, 0);
 
 	vkEndCommandBuffer(cmdBuf);
 }
