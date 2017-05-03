@@ -698,7 +698,7 @@ const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationH
 	GPUFriendlyBB bb = {};
 	BoundingBox& dxbb = get<4>(_meshes[mesh]);
 	bb.px = dxbb.Center.x; bb.py = dxbb.Center.y; bb.pz = dxbb.Center.z;
-	bb.ex = dxbb.Extents.x; bb.ey = dxbb.Extents.y; bb.ey = dxbb.Extents.y;
+	bb.ex = dxbb.Extents.x; bb.ey = dxbb.Extents.y; bb.ez = dxbb.Extents.z;
 	bb.containedVertices = get<3>(_meshes[mesh]).NumFace * 3;
 	_vertexBufferHandler->CreateBuffer(&bb, 1, VertexType::Bounding);
 
@@ -716,6 +716,7 @@ const void Renderer::UpdateTranslation(const DirectX::XMMATRIX & translation, Tr
 
 void Renderer::SetViewMatrix(const XMMATRIX & view)
 {
+	XMStoreFloat4x4(&testC.view, view);
 	XMStoreFloat4x4(&_ViewProjection.view, XMMatrixTranspose(view));
 	_frustum.Transform(_frustumTransformed,XMMatrixInverse(nullptr, view));
 
@@ -738,6 +739,7 @@ void Renderer::SetProjectionMatrix(const XMMATRIX & projection)
 
 	BoundingFrustum::CreateFromMatrix(_frustum, projection);
 
+	XMStoreFloat4x4(&testC.projection, projection);
 	_UpdateViewProjection();
 }
 
@@ -767,54 +769,123 @@ const void Renderer::FrustumCull(VkCommandBuffer & buffer, uint32_t start, uint3
 
 void Renderer::_UpdateFrustumPlanes()
 {
-	XMMATRIX v = XMLoadFloat4x4(&_ViewProjection.view);
-	XMMATRIX p = XMLoadFloat4x4(&_ViewProjection.projection);
-	XMFLOAT4X4 vp;
-	XMStoreFloat4x4(&vp, XMMatrixTranspose(v * p));
-	auto& f = _CullingInfo.frustum;
 
-	//Left plane, column 4 + column 1
-	f.lpx = vp._14 + vp._11;
-	f.lpy = vp._24 + vp._21;
-	f.lpz = vp._34 + vp._31;
-	f.lpd = vp._44 + vp._41;
-
-	//Right plane, column 4 - column 1
-	f.rpx = vp._14 - vp._11;
-	f.rpy = vp._24 - vp._21;
-	f.rpz = vp._34 - vp._31;
-	f.rpd = vp._44 - vp._41;
-
-	//Bottom plane, column 4 + column2
-	f.bpx = vp._14 + vp._12;
-	f.bpy = vp._24 + vp._22;
-	f.bpz = vp._34 + vp._32;
-	f.bpd = vp._44 + vp._42;
-
-	//Top plane, column4 - column2
-	f.tpx = vp._14 - vp._12;
-	f.tpy = vp._24 - vp._22;
-	f.tpz = vp._34 - vp._32;
-	f.tpd = vp._44 - vp._42;
-
-	//Near plane, column 4 + column 3
-	f.npx = vp._14 + vp._13;
-	f.npy = vp._14 + vp._23;
-	f.npz = vp._14 + vp._33;
-	f.npd = vp._14 + vp._43;
-
-	//Far plane, column4 - column 3
-	f.fpx = vp._14 - vp._13;
-	f.fpy = vp._24 - vp._23;
-	f.fpz = vp._34 - vp._33;
-	f.fpd = vp._44 - vp._43;
+	XMFLOAT4 fPlanes[6];
 	
-	void* src;
-	VulkanHelpers::MapMemory(_device, _CullingStagingMemory, &src, sizeof(GPUCullUniformBuffer));
-	memcpy(src, &_CullingInfo, sizeof(GPUCullUniformBuffer));
+	XMMATRIX View = XMLoadFloat4x4(&testC.view);
+	XMMATRIX Projection = XMLoadFloat4x4(&testC.projection);
+	//Projection = XMMatrixScaling(1.0f, -1.0, 1.0f) * Projection;
+	XMMATRIX viewProj = View * Projection; /*Get the plane equations in world space*/
+	XMFLOAT4 r1, r2, r3, r4; /* Each row of the view*projection */
+	XMStoreFloat4(&r1, viewProj.r[0]);
+	XMStoreFloat4(&r2, viewProj.r[1]);
+	XMStoreFloat4(&r3, viewProj.r[2]);
+	XMStoreFloat4(&r4, viewProj.r[3]);
+
+	/*Left plane, fourth column + first column*/
+	fPlanes[0].x = r1.w + r1.x;
+	fPlanes[0].y = r2.w + r2.x;
+	fPlanes[0].z = r3.w + r3.x;
+	fPlanes[0].w = r4.w + r4.x;
+
+	/*right plane, fourth column - first column*/
+	fPlanes[1].x = r1.w - r1.x;
+	fPlanes[1].y = r2.w - r2.x;
+	fPlanes[1].z = r3.w - r3.x;
+	fPlanes[1].w = r4.w - r4.x;
+
+	/*Top plane, fourth column - second column*/
+	fPlanes[2].x = r1.w - r1.y;
+	fPlanes[2].y = r2.w - r2.y;
+	fPlanes[2].z = r3.w - r3.y;
+	fPlanes[2].w = r4.w - r4.y;
+
+	/*Bottom plane, fourth column + second column*/
+	fPlanes[3].x = r1.w + r1.y;
+	fPlanes[3].y = r2.w + r2.y;
+	fPlanes[3].z = r3.w + r3.y;
+	fPlanes[3].w = r4.w + r4.y;
+
+	/*NEar plane, fourth column + third column*/
+	fPlanes[4].x = r1.w + r1.z;
+	fPlanes[4].y = r2.w + r2.z;
+	fPlanes[4].z = r3.w + r3.z;
+	fPlanes[4].w = r4.w + r4.z;
+
+	/*Far plane, fourth column - third column*/
+	fPlanes[5].x = r1.w - r1.z;
+	fPlanes[5].y = r2.w - r2.z;
+	fPlanes[5].z = r3.w - r3.z;
+	fPlanes[5].w = r4.w - r4.z;
+
+	/*Normalize the planes*/
+	for (int i = 0; i < 6; i++)
+	{
+		float length = sqrtf((fPlanes[i].x * fPlanes[i].x) + (fPlanes[i].y * fPlanes[i].y) + (fPlanes[i].z * fPlanes[i].z));
+		fPlanes[i].x /= length;
+		fPlanes[i].y /= length;
+		fPlanes[i].z /= length;
+		fPlanes[i].w /= length;
+	}
+
+	memcpy(&_CullingInfo, fPlanes, sizeof(GPUCullUniformBuffer));
+	//XMMATRIX v = XMLoadFloat4x4(&_ViewProjection.view);
+	//XMMATRIX p = XMLoadFloat4x4(&_ViewProjection.projection);
+	//XMFLOAT4X4 vp;
+	//XMStoreFloat4x4(&vp, XMMatrixTranspose(v * p));
+	//auto& f = _CullingInfo.frustum;
+
+	////Left plane, column 4 + column 1
+	//f.lpx = vp._14 + vp._11;
+	//f.lpy = vp._24 + vp._21;
+	//f.lpz = vp._34 + vp._31;
+	//f.lpd = vp._44 + vp._41;
+
+	////Right plane, column 4 - column 1
+	//f.rpx = vp._14 - vp._11;
+	//f.rpy = vp._24 - vp._21;
+	//f.rpz = vp._34 - vp._31;
+	//f.rpd = vp._44 - vp._41;
+
+	////Bottom plane, column 4 + column2
+	//f.bpx = vp._14 + vp._12;
+	//f.bpy = vp._24 + vp._22;
+	//f.bpz = vp._34 + vp._32;
+	//f.bpd = vp._44 + vp._42;
+
+	////Top plane, column4 - column2
+	//f.tpx = vp._14 - vp._12;
+	//f.tpy = vp._24 - vp._22;
+	//f.tpz = vp._34 - vp._32;
+	//f.tpd = vp._44 - vp._42;
+
+	////Near plane, column 4 + column 3
+	//f.npx = vp._14 + vp._13;
+	//f.npy = vp._14 + vp._23;
+	//f.npz = vp._14 + vp._33;
+	//f.npd = vp._14 + vp._43;
+
+	////Far plane, column4 - column 3
+	//f.fpx = vp._14 - vp._13;
+	//f.fpy = vp._24 - vp._23;
+	//f.fpz = vp._34 - vp._33;
+	//f.fpd = vp._44 - vp._43;
+
+	//float* ele = (float*)&f;
+	//for (int i = 0; i < 16; i += 4)
+	//{
+	//	float length = sqrtf(ele[i] * ele[i] + ele[i + 1] * ele[i + 1] + ele[i + 2] * ele[i + 2]);
+	//	ele[i] /= length;
+	//	ele[i + 1] /= length;
+	//	ele[i + 2] /= length;
+	//	ele[i + 3] /= length;
+	//}
+	
+	void* dst;
+	VulkanHelpers::MapMemory(_device, _CullingStagingMemory, &dst, sizeof(GPUCullUniformBuffer));
+	memcpy(dst, &_CullingInfo, sizeof(GPUCullUniformBuffer));
 	vkUnmapMemory(_device, _CullingStagingMemory);
 
-	//TODO: Make a fence instead of waiting for idle.
 	vkQueueWaitIdle(_queue);
 	VulkanHelpers::BeginCommandBuffer(_cmdBuffer);
 	VulkanHelpers::CopyDataBetweenBuffers(_cmdBuffer, _CullingStagingBuffer, 0, _CullingBuffer, 0, sizeof(GPUCullUniformBuffer));
@@ -997,7 +1068,11 @@ void Renderer::_RenderIndirectRecord()
 	//_vertexBufferHandler->FlushBuffer(VertexType::Translation);
 	_vertexBufferHandler->FlushBuffer(VertexType::IndirectBuffer);
 
+	_IndirectGPUCulling();
+	
 	_RecordIndirectCmdBuffer(_cmdBuffer, true);
+
+	
 
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;

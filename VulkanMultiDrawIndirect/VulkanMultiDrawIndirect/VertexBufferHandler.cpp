@@ -205,7 +205,7 @@ const void VertexBufferHandler::_CreateBufferSet(VertexType type, uint32_t maxEl
 	switch (type)
 	{
 	case VertexType::IndirectBuffer:
-		usageFlags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+		usageFlags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 		memoryFlags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 		break;
 	default:

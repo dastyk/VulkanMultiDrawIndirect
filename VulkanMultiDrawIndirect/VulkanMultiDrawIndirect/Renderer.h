@@ -39,12 +39,13 @@ class Renderer
 
 	struct GPUFriendlyFrustum
 	{
-		float lpx, lpy, lpz, lpd; //Left plane
-		float rpx, rpy, rpz, rpd; //Right plane
-		float bpx, bpy, bpz, bpd; //Bottom plane
-		float tpx, tpy, tpz, tpd; //Top plane
-		float npx, npy, npz, npd; //near plane
-		float fpx, fpy, fpz, fpd; //Far plane
+		DirectX::XMFLOAT4 planes[6];
+		//float lpx, lpy, lpz, lpd; //Left plane
+		//float rpx, rpy, rpz, rpd; //Right plane
+		//float bpx, bpy, bpz, bpd; //Bottom plane
+		//float tpx, tpy, tpz, tpd; //Top plane
+		//float npx, npy, npz, npd; //near plane
+		//float fpx, fpy, fpz, fpd; //Far plane
 	};
 
 public:
@@ -143,6 +144,7 @@ private:
 	void _CreateComputePipeline();
 	void _CreateDescriptorStuff();
 
+	VPUniformBuffer testC;
 
 public:
 	int StartTest();

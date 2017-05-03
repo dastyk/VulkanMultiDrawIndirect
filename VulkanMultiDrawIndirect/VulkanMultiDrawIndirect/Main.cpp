@@ -114,13 +114,13 @@ int main(int argc, char** argv)
 			const float degreesPerSecond = 180.0f;
 
 			if (input.IsKeyDown(SDLK_w))
-				scene._camera.MoveForward(dt * 10.0f);
+				scene._camera.MoveForward(dt * 30.0f);
 			if (input.IsKeyDown(SDLK_a))
-				scene._camera.MoveRight(dt * -10.0f);
+				scene._camera.MoveRight(dt * -30.0f);
 			if (input.IsKeyDown(SDLK_s))
-				scene._camera.MoveForward(dt * -10.0f);
+				scene._camera.MoveForward(dt * -30.0f);
 			if (input.IsKeyDown(SDLK_d))
-				scene._camera.MoveRight(dt * 10.0f);
+				scene._camera.MoveRight(dt * 30.0f);
 			if (input.IsKeyDown(SDLK_RIGHT))
 				scene._camera.RotateYaw(degreesPerSecond * dt);
 			if (input.IsKeyDown(SDLK_LEFT))
