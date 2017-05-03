@@ -40,5 +40,7 @@ private:
 	std::vector<float> _objectOffsetAngles;
 
 	std::ofstream out;
+
+	bool _update = false;
 };
 

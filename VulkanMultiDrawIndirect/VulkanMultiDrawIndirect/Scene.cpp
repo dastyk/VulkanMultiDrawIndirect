@@ -97,28 +97,62 @@ const void Scene::Init()
 
 
 	DebugUtils::ConsoleThread::AddCommand(&testStart);
+
+	DebugUtils::DebugConsole::Command_Structure updateSwitch =
+	{
+		this,
+		[](void* userData, int argc, char** argv) {
+			if (argc < 2)
+				return;
+
+			Scene* scene = (Scene*)userData;
+
+			if (DebugUtils::GetArg("on", nullptr, argc, argv))
+			{
+				scene->_update = true;
+			}
+			else if (DebugUtils::GetArg("off", nullptr, argc, argv))
+			{
+				scene->_update = false;
+			}
+			else
+			{
+				printf("Usage: update [on/off]\n");
+			}
+		},
+		[](void* userData, int argc, char** argv) {
+			printf("Usage:\n");
+			printf("update [on/off]\n");
+		},
+		"update",
+		"Updates translations of scene meshes."
+	};
+
+	DebugUtils::ConsoleThread::AddCommand(&updateSwitch);
 }
 
 const void Scene::Frame(float dt)
 {
 	_timer.TimeStart("Frame");
 
-	//for (uint32_t i = 0; i < 1000; i++)
-	//{
-	//	auto& o = _objects[rand()%_objects.size()];
-	//	XMMATRIX t = XMLoadFloat4x4(&o.translation);
-	//	t *= XMMatrixTranslation((rand() % 200 - 100)/100.0f*dt, (rand() % 200 - 100) / 100.0f*dt, (rand() % 200 - 100) / 100.0f*dt);
-	//	XMStoreFloat4x4(&o.translation, t);
-	//	_renderer.UpdateTranslation(t, o.translationHandle);
-	//}
-	for (uint32_t i = 0; i < _objects.size(); ++i)
+	if (_update)
 	{
-		auto& o = _objects[i];
-		_objectOffsetAngles[i] += XM_2PI * dt;
-		o.translation._42 = 10.0f * sinf(_objectOffsetAngles[i]);
-		_renderer.UpdateTranslation(XMLoadFloat4x4(&o.translation), o.translationHandle);
+		//for (uint32_t i = 0; i < 1000; i++)
+		//{
+		//	auto& o = _objects[rand()%_objects.size()];
+		//	XMMATRIX t = XMLoadFloat4x4(&o.translation);
+		//	t *= XMMatrixTranslation((rand() % 200 - 100)/100.0f*dt, (rand() % 200 - 100) / 100.0f*dt, (rand() % 200 - 100) / 100.0f*dt);
+		//	XMStoreFloat4x4(&o.translation, t);
+		//	_renderer.UpdateTranslation(t, o.translationHandle);
+		//}
+		for (uint32_t i = 0; i < _objects.size(); ++i)
+		{
+			auto& o = _objects[i];
+			_objectOffsetAngles[i] += XM_2PI * dt;
+			o.translation._42 = 10.0f * sinf(_objectOffsetAngles[i]);
+			_renderer.UpdateTranslation(XMLoadFloat4x4(&o.translation), o.translationHandle);
+		}
 	}
-
 
 	_renderer.SetViewMatrix(_camera.GetView());
 	_renderer.Render();
