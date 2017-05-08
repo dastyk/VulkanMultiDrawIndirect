@@ -193,6 +193,7 @@ private:
 
 
 	bool _doCulling;
+	bool _doCullingGPU = false;
 	GPUCullUniformBuffer _CullingInfo;
 	VkBuffer _CullingBuffer;
 	VkDeviceMemory _CullingMemory;

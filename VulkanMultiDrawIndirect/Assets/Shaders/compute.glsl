@@ -27,6 +27,7 @@ struct Frustum
 	vec4 bottomPlane;
 	vec4 nearPlane;
 	vec4 farPlane;
+
 	
 };
 
@@ -58,6 +59,7 @@ int intersectionTest(uint index)
 	vec4 pos = g_BoundingBoxes[index].pos;
 	pos.w = 1.0;
 	pos = pos * world;
+	
 	int i;
 
 /*	for(i = 0; i < 6; i++)
@@ -73,7 +75,7 @@ int intersectionTest(uint index)
 */
 	vec3 minpoint = pos.xyz - abs(g_BoundingBoxes[index].extents.xyz);
 	vec3 maxpoint = pos.xyz + abs(g_BoundingBoxes[index].extents.xyz);
-
+/*
 	vec4 planes[] = {g_Frustum.leftPlane,
 	g_Frustum.rightPlane, 
 	g_Frustum.topPlane, 
@@ -105,14 +107,14 @@ int intersectionTest(uint index)
 			return 0;
 	}
 	return 1;
+	*/
 
-/*
 	plane = g_Frustum.leftPlane;
 	plane.w = 0.0f;
 	absPlane = abs(plane);
 	d = dot(pos.xyz, plane.xyz);
 	r = dot(g_BoundingBoxes[index].extents.xyz, absPlane.xyz);
-	if(!(d - r >= -g_Frustum.leftPlane.w))
+	if(!(d - r >= -g_Frustum.leftPlane.w || d + r > -g_Frustum.leftPlane.w))
 		return 0;
 
 	plane = g_Frustum.rightPlane;
@@ -120,7 +122,7 @@ int intersectionTest(uint index)
 	absPlane = abs(plane);
 	d = dot(pos.xyz, plane.xyz);
 	r = dot(g_BoundingBoxes[index].extents.xyz, absPlane.xyz);
-	if(!(d - r >= -g_Frustum.rightPlane.w))
+	if(!(d - r >= -g_Frustum.rightPlane.w || d + r > -g_Frustum.rightPlane.w))
 		return 0;
 
 	plane = g_Frustum.bottomPlane;
@@ -128,7 +130,7 @@ int intersectionTest(uint index)
 	absPlane = abs(plane);
 	d = dot(pos.xyz, plane.xyz);
 	r = dot(g_BoundingBoxes[index].extents.xyz, absPlane.xyz);
-	if(!(d - r >= -g_Frustum.bottomPlane.w))
+	if(!(d - r >= -g_Frustum.bottomPlane.w || d + r > -g_Frustum.bottomPlane.w))
 		return 0;
 	
 	plane = g_Frustum.topPlane;
@@ -136,7 +138,7 @@ int intersectionTest(uint index)
 	absPlane = abs(plane);
 	d = dot(pos.xyz, plane.xyz);
 	r = dot(g_BoundingBoxes[index].extents.xyz, absPlane.xyz);
-	if(!(d - r >= -g_Frustum.topPlane.w))
+	if(!(d - r >= -g_Frustum.topPlane.w || d + r > -g_Frustum.topPlane.w))
 		return 0;
 
 	plane = g_Frustum.nearPlane;
@@ -144,7 +146,7 @@ int intersectionTest(uint index)
 	absPlane = abs(plane);
 	d = dot(pos.xyz, plane.xyz);
 	r = dot(g_BoundingBoxes[index].extents.xyz, absPlane.xyz);
-	if(!(d - r >= -g_Frustum.nearPlane.w))
+	if(!(d - r >= -g_Frustum.nearPlane.w || d + r > -g_Frustum.nearPlane.w))
 		return 0;
 	
 	plane = g_Frustum.farPlane;
@@ -152,10 +154,10 @@ int intersectionTest(uint index)
 	absPlane = abs(plane);
 	d = dot(pos.xyz, plane.xyz);
 	r = dot(g_BoundingBoxes[index].extents.xyz, absPlane.xyz);
-	if(!(d - r >= -g_Frustum.farPlane.w))
+	if(!(d - r >= -g_Frustum.farPlane.w || d + r > -g_Frustum.farPlane.w))
 		return 0;
 	
-	return 1;*/
+	return 1;
 }
 
 void main() {

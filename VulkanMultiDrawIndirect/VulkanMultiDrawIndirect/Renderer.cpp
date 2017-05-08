@@ -196,6 +196,8 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 			if (std::string("on") == opt)
 			{
 				r->_doCulling = true;
+				if (r->_doCullingGPU)
+					printf("Warning. GPU frustum culling is already on.\n");
 			}
 			else if (std::string("off") == opt)
 			{
@@ -204,6 +206,31 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 			else
 			{
 				printf("\n -c [on/off]\t\t Render with frustum culling.\n");
+			}
+			if (argc < 4)
+			{
+				return;
+			}
+		}
+
+		if (DebugUtils::GetArg("-gpuc", &opt, argc, argv))
+		{
+			if (std::string("on") == opt)
+			{
+				r->_doCullingGPU = true;
+				if (r->_doCulling)
+					printf("Warning. CPU frustum culling is already on.\n");
+				if (r->_currentRenderStrategy != &Renderer::_RenderIndirectRecord && r->_currentRenderStrategy != &Renderer::_RenderIndirectResubmit)
+					printf("Warning. GPU culling only works with indirect rendering.\n");
+			}
+			else if (std::string("off") == opt)
+			{
+				r->_doCullingGPU = false;
+			}
+			else
+			{
+				printf("\n -c [on/off]\t\t Render with frustum culling on the GPU.\n");
+				printf("\t\t Only works with indirect rendering.\n");
 			}
 			if (argc < 4)
 			{
@@ -281,6 +308,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 		printf("\t -r\t\t Record the command buffer each frame.\n");
 		printf("\t -s\t\t Resubmit a pre-recorded command buffer.\n");
 		printf("\t -c [on/off]\t\t Render with frustum culling.\n");
+		printf("\t -gpuc [on/off]\t\t Render with frustum culling on the GPU");
 		},
 		"strat",
 		"Sets the rendering strategy."
@@ -773,7 +801,7 @@ void Renderer::_UpdateFrustumPlanes()
 	
 	XMMATRIX View = XMLoadFloat4x4(&testC.view);
 	XMMATRIX Projection = XMLoadFloat4x4(&testC.projection);
-	//Projection = XMMatrixScaling(1.0f, -1.0, 1.0f) * Projection;
+	Projection = XMMatrixScaling(1.0f, -1.0, 1.0f) * Projection;
 	XMMATRIX viewProj = View * Projection; /*Get the plane equations in world space*/
 	XMFLOAT4 r1, r2, r3, r4; /* Each row of the view*projection */
 	XMStoreFloat4(&r1, viewProj.r[0]);
@@ -806,10 +834,11 @@ void Renderer::_UpdateFrustumPlanes()
 	fPlanes[3].w = r4.w + r4.y;
 
 	/*NEar plane, fourth column + third column*/
-	fPlanes[4].x = r1.w + r1.z;
-	fPlanes[4].y = r2.w + r2.z;
-	fPlanes[4].z = r3.w + r3.z;
-	fPlanes[4].w = r4.w + r4.z;
+	/* Just the third column?*/
+	fPlanes[4].x = r1.z;//r1.w + r1.z;
+	fPlanes[4].y = r2.z;//r2.w + r2.z;
+	fPlanes[4].z = r3.z;//r3.w + r3.z;
+	fPlanes[4].w = r4.z;//r4.w + r4.z;
 
 	/*Far plane, fourth column - third column*/
 	fPlanes[5].x = r1.w - r1.z;
@@ -1066,8 +1095,8 @@ void Renderer::_RenderIndirectRecord()
 {
 	//_vertexBufferHandler->FlushBuffer(VertexType::Translation);
 	_vertexBufferHandler->FlushBuffer(VertexType::IndirectBuffer);
-
-	_IndirectGPUCulling();
+	if(_doCullingGPU)
+		_IndirectGPUCulling();
 	
 	_RecordIndirectCmdBuffer(_cmdBuffer, true);
 
@@ -1090,7 +1119,8 @@ void Renderer::_RenderIndirectResubmit()
 {
 	//_vertexBufferHandler->FlushBuffer(VertexType::Translation);
 	_vertexBufferHandler->FlushBuffer(VertexType::IndirectBuffer);
-
+	if (_doCullingGPU)
+		_IndirectGPUCulling();
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.pNext = nullptr;
