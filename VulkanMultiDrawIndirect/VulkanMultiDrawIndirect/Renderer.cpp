@@ -198,23 +198,22 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 		Renderer* r = static_cast<Renderer*>(userData);
 
 		char* opt;
+		bool oO = false;
 		if (DebugUtils::GetArg("-c", &opt, argc, argv))
 		{
 			if (std::string("on") == opt)
 			{
 				r->_doCulling = true;
+				oO = true;
 			}
 			else if (std::string("off") == opt)
 			{
 				r->_doCulling = false;
+				oO = true;
 			}
 			else
 			{
 				printf("\n -c [on/off]\t\t Render with frustum culling.\n");
-			}
-			if (argc < 4)
-			{
-				return;
 			}
 		}
 
@@ -222,19 +221,17 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 		{
 			if (std::string("on") == opt)
 			{
+				oO = true;
 				r->_doThreadedRecord = true;
 			}
 			else if (std::string("off") == opt)
 			{
+				oO = true;
 				r->_doThreadedRecord = false;
 			}
 			else
 			{
 				printf("\n -m [on/off]\t\t Record draw commands with multithreading.\n");
-			}
-			if (argc < 4)
-			{
-				return;
 			}
 		}
 
@@ -247,9 +244,19 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 			}
 			else if (DebugUtils::GetArg("-s", nullptr, argc, argv)) // Indirect Resubmit
 			{
-				r->_RecordIndirectCmdBuffer(r->_indirectResubmitCmdBuf, false);
+				if(r->_currentRenderStrategy != &Renderer::_RenderIndirectResubmit)
+					r->_RecordIndirectCmdBuffer(r->_indirectResubmitCmdBuf, false);
 				r->_currentRenderStrategy = &Renderer::_RenderIndirectResubmit;
 				return;
+			}
+			else if (r->_currentRenderStrategy == &Renderer::_RenderTraditionalRecord)
+			{
+				r->_currentRenderStrategy = &Renderer::_RenderIndirectRecord;
+			}
+			else if (r->_currentRenderStrategy == &Renderer::_RenderTraditionalResubmit)
+			{
+				r->_RecordIndirectCmdBuffer(r->_indirectResubmitCmdBuf, false);
+				r->_currentRenderStrategy = &Renderer::_RenderIndirectResubmit;
 			}
 		}
 		else if (DebugUtils::GetArg("-t", nullptr, argc, argv))
@@ -261,22 +268,60 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 			}
 			else if (DebugUtils::GetArg("-s", nullptr, argc, argv)) // Traditional resubmit
 			{
-				r->_RecordTraditionalCmdBuffer(r->_traditionalCmdB, false);
+				if(r->_currentRenderStrategy != &Renderer::_RenderTraditionalResubmit)
+					r->_RecordTraditionalCmdBuffer(r->_traditionalCmdB, false);
 
 				r->_currentRenderStrategy = &Renderer::_RenderTraditionalResubmit;
 				return;
 			}
+			else if (r->_currentRenderStrategy == &Renderer::_RenderIndirectRecord)
+			{
+				r->_currentRenderStrategy = &Renderer::_RenderTraditionalRecord;
+			}
+			else if (r->_currentRenderStrategy == &Renderer::_RenderIndirectResubmit)
+			{
+				r->_RecordTraditionalCmdBuffer(r->_traditionalCmdB, false);
+
+				r->_currentRenderStrategy = &Renderer::_RenderTraditionalResubmit;
+			}
 		}
+		else if (DebugUtils::GetArg("-r", nullptr, argc, argv))
+		{
+			if (r->_currentRenderStrategy == &Renderer::_RenderIndirectResubmit)
+			{
+				r->_currentRenderStrategy = &Renderer::_RenderIndirectRecord;
+			}
+			else if (r->_currentRenderStrategy == &Renderer::_RenderTraditionalResubmit)
+			{
+				r->_currentRenderStrategy = &Renderer::_RenderTraditionalRecord;
+			}
+		}
+		else if (DebugUtils::GetArg("-s", nullptr, argc, argv))
+		{
+			if (r->_currentRenderStrategy == &Renderer::_RenderIndirectRecord)
+			{
+				r->_RecordIndirectCmdBuffer(r->_indirectResubmitCmdBuf, false);
+				r->_currentRenderStrategy = &Renderer::_RenderIndirectResubmit;
+			}
+			else if (r->_currentRenderStrategy == &Renderer::_RenderTraditionalRecord)
+			{
+				r->_RecordTraditionalCmdBuffer(r->_traditionalCmdB, false);
+				r->_currentRenderStrategy = &Renderer::_RenderTraditionalResubmit;
+			}
+		}
+		else if(!oO)
+		{
+			printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
+			printf("*** Render Types ***\n");
+			printf("\t -i\t\t Use multidraw indirect rendering\n");
+			printf("\t -t\t\t Use traditional rendering\n");
 
-		printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
-		printf("*** Render Types ***\n");
-		printf("\t -i\t\t Use multidraw indirect rendering\n");
-		printf("\t -t\t\t Use traditional rendering\n");
-
-		printf("\n\n*** Recording options ***\n");
-		printf("\t -r\t\t Record the command buffer each frame.\n");
-		printf("\t -s\t\t Resubmit a pre-recorded command buffer.\n");	
-		printf("\t -c [on/off]\t\t Render with frustum culling.\n");
+			printf("\n\n*** Recording options ***\n");
+			printf("\t -r\t\t Record the command buffer each frame.\n");
+			printf("\t -s\t\t Resubmit a pre-recorded command buffer.\n");
+			printf("\t -c [on/off]\t\t Render with frustum culling.\n");
+		}
+		
 	},
 		[](void* userData, int argc, char** argv) {
 		printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
@@ -303,7 +348,11 @@ Renderer::~Renderer()
 {
 
 	for (uint8_t i = 0;i < NUM_SEC_BUFFERS; i++)
+	{
 		TerminateThread(_threads[i].native_handle(), 0);
+		_threads[i].join();
+	}
+		
 
 	vkDeviceWaitIdle(_device);
 
