@@ -29,8 +29,10 @@ const void Scene::Init()
 	{
 		for (int j = 0; j < 100; j++)
 		{
-			
-			deer.translation = _renderer.CreateTranslation(glm::translate(glm::mat4(), glm::vec3(20.0f * i, 0, 16.0f * j)));
+			int k = 0;
+			if (j % 10 == 0)
+				k = 10;
+			deer.translation = _renderer.CreateTranslation(glm::translate(glm::mat4(), glm::vec3(20.0f * i, k, 16.0f * j)));
 			_objects.push_back(deer);
 		}
 	}

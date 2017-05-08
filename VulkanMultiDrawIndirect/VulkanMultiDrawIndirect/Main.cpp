@@ -113,13 +113,13 @@ int main(int argc, char** argv)
 			float dt = timer.DeltaTime();
 
 			if (input.IsKeyDown(SDLK_w))
-				scene._camera.MoveForward(dt * 10.0f);
+				scene._camera.MoveForward(dt * 30.0f);
 			if (input.IsKeyDown(SDLK_a))
-				scene._camera.MoveRight(dt * -10.0f);
+				scene._camera.MoveRight(dt * -30.0f);
 			if (input.IsKeyDown(SDLK_s))
-				scene._camera.MoveForward(dt * -10.0f);
+				scene._camera.MoveForward(dt * -30.0f);
 			if (input.IsKeyDown(SDLK_d))
-				scene._camera.MoveRight(dt * 10.0f);
+				scene._camera.MoveRight(dt * 30.0f);
 			if (input.IsKeyDown(SDLK_RIGHT))
 				scene._camera.offsetOrientation(0.0f, 180.0f * dt);
 			if (input.IsKeyDown(SDLK_LEFT))
