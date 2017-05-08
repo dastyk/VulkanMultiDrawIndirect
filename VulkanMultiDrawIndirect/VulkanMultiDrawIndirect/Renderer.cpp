@@ -12,16 +12,23 @@
 
 using namespace DirectX;
 using namespace std;
+static bool go = true;
+static bool cull = true;
+SYNCHRONIZATION_BARRIER  barrier;
 
 
-const void FrustumCullingThread(VkCommandBuffer* buffer, const Renderer* renderer, uint32_t start, uint32_t count)
+const void ThreadEntry(VkCommandBuffer* buffer, const Renderer* renderer, uint8_t index)
 {
-	renderer->FrustumCull(*buffer, start, count);
-}
-
-const void RecordDrawCallsThread(VkCommandBuffer* buffer, const Renderer* renderer, uint32_t start, uint32_t count)
-{
-	renderer->RecordDrawCalls(*buffer, start, count);
+	while (go)
+	{
+		EnterSynchronizationBarrier(&barrier, SYNCHRONIZATION_BARRIER_FLAGS_NO_DELETE);
+		if(cull)
+			renderer->FrustumCull(*buffer, index);
+		else
+			renderer->RecordDrawCalls(*buffer, index);
+		EnterSynchronizationBarrier(&barrier, SYNCHRONIZATION_BARRIER_FLAGS_NO_DELETE);
+	}
+	
 }
 
 
@@ -30,6 +37,11 @@ const void RecordDrawCallsThread(VkCommandBuffer* buffer, const Renderer* render
 
 Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderTraditionalRecord), _doThreadedRecord(true), _doCulling(true), _testRunning(false)
 {
+
+	InitializeSynchronizationBarrier(&barrier, NUM_SEC_BUFFERS + 1, 100);
+
+	for (uint8_t i = 0; i< NUM_SEC_BUFFERS; i++)
+		 _threads[i] = std::move(std::thread(ThreadEntry, &_secBuffers[i], this, i));
 
 	/************Create Instance*************/
 	const std::vector<const char*> validationLayers = {
@@ -191,25 +203,24 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 		Renderer* r = static_cast<Renderer*>(userData);
 
 		char* opt;
+		bool oO = false;
 		if (DebugUtils::GetArg("-c", &opt, argc, argv))
 		{
 			if (std::string("on") == opt)
 			{
 				r->_doCulling = true;
+				oO = true;
 				if (r->_doCullingGPU)
 					printf("Warning. GPU frustum culling is already on.\n");
 			}
 			else if (std::string("off") == opt)
 			{
 				r->_doCulling = false;
+				oO = true;
 			}
 			else
 			{
 				printf("\n -c [on/off]\t\t Render with frustum culling.\n");
-			}
-			if (argc < 4)
-			{
-				return;
 			}
 		}
 
@@ -242,19 +253,17 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 		{
 			if (std::string("on") == opt)
 			{
+				oO = true;
 				r->_doThreadedRecord = true;
 			}
 			else if (std::string("off") == opt)
 			{
+				oO = true;
 				r->_doThreadedRecord = false;
 			}
 			else
 			{
 				printf("\n -m [on/off]\t\t Record draw commands with multithreading.\n");
-			}
-			if (argc < 4)
-			{
-				return;
 			}
 		}
 
@@ -267,9 +276,19 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 			}
 			else if (DebugUtils::GetArg("-s", nullptr, argc, argv)) // Indirect Resubmit
 			{
-				r->_RecordIndirectCmdBuffer(r->_indirectResubmitCmdBuf, false);
+				if(r->_currentRenderStrategy != &Renderer::_RenderIndirectResubmit)
+					r->_RecordIndirectCmdBuffer(r->_indirectResubmitCmdBuf, false);
 				r->_currentRenderStrategy = &Renderer::_RenderIndirectResubmit;
 				return;
+			}
+			else if (r->_currentRenderStrategy == &Renderer::_RenderTraditionalRecord)
+			{
+				r->_currentRenderStrategy = &Renderer::_RenderIndirectRecord;
+			}
+			else if (r->_currentRenderStrategy == &Renderer::_RenderTraditionalResubmit)
+			{
+				r->_RecordIndirectCmdBuffer(r->_indirectResubmitCmdBuf, false);
+				r->_currentRenderStrategy = &Renderer::_RenderIndirectResubmit;
 			}
 		}
 		else if (DebugUtils::GetArg("-t", nullptr, argc, argv))
@@ -281,22 +300,60 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 			}
 			else if (DebugUtils::GetArg("-s", nullptr, argc, argv)) // Traditional resubmit
 			{
-				r->_RecordTraditionalCmdBuffer(r->_traditionalCmdB, false);
+				if(r->_currentRenderStrategy != &Renderer::_RenderTraditionalResubmit)
+					r->_RecordTraditionalCmdBuffer(r->_traditionalCmdB, false);
 
 				r->_currentRenderStrategy = &Renderer::_RenderTraditionalResubmit;
 				return;
 			}
+			else if (r->_currentRenderStrategy == &Renderer::_RenderIndirectRecord)
+			{
+				r->_currentRenderStrategy = &Renderer::_RenderTraditionalRecord;
+			}
+			else if (r->_currentRenderStrategy == &Renderer::_RenderIndirectResubmit)
+			{
+				r->_RecordTraditionalCmdBuffer(r->_traditionalCmdB, false);
+
+				r->_currentRenderStrategy = &Renderer::_RenderTraditionalResubmit;
+			}
 		}
+		else if (DebugUtils::GetArg("-r", nullptr, argc, argv))
+		{
+			if (r->_currentRenderStrategy == &Renderer::_RenderIndirectResubmit)
+			{
+				r->_currentRenderStrategy = &Renderer::_RenderIndirectRecord;
+			}
+			else if (r->_currentRenderStrategy == &Renderer::_RenderTraditionalResubmit)
+			{
+				r->_currentRenderStrategy = &Renderer::_RenderTraditionalRecord;
+			}
+		}
+		else if (DebugUtils::GetArg("-s", nullptr, argc, argv))
+		{
+			if (r->_currentRenderStrategy == &Renderer::_RenderIndirectRecord)
+			{
+				r->_RecordIndirectCmdBuffer(r->_indirectResubmitCmdBuf, false);
+				r->_currentRenderStrategy = &Renderer::_RenderIndirectResubmit;
+			}
+			else if (r->_currentRenderStrategy == &Renderer::_RenderTraditionalRecord)
+			{
+				r->_RecordTraditionalCmdBuffer(r->_traditionalCmdB, false);
+				r->_currentRenderStrategy = &Renderer::_RenderTraditionalResubmit;
+			}
+		}
+		else if(!oO)
+		{
+			printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
+			printf("*** Render Types ***\n");
+			printf("\t -i\t\t Use multidraw indirect rendering\n");
+			printf("\t -t\t\t Use traditional rendering\n");
 
-		printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
-		printf("*** Render Types ***\n");
-		printf("\t -i\t\t Use multidraw indirect rendering\n");
-		printf("\t -t\t\t Use traditional rendering\n");
-
-		printf("\n\n*** Recording options ***\n");
-		printf("\t -r\t\t Record the command buffer each frame.\n");
-		printf("\t -s\t\t Resubmit a pre-recorded command buffer.\n");	
-		printf("\t -c [on/off]\t\t Render with frustum culling.\n");
+			printf("\n\n*** Recording options ***\n");
+			printf("\t -r\t\t Record the command buffer each frame.\n");
+			printf("\t -s\t\t Resubmit a pre-recorded command buffer.\n");
+			printf("\t -c [on/off]\t\t Render with frustum culling.\n");
+		}
+		
 	},
 		[](void* userData, int argc, char** argv) {
 		printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
@@ -322,7 +379,18 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 
 Renderer::~Renderer()
 {
+
+	for (uint8_t i = 0;i < NUM_SEC_BUFFERS; i++)
+	{
+		TerminateThread(_threads[i].native_handle(), 0);
+		_threads[i].join();
+	}
+		
+
 	vkDeviceWaitIdle(_device);
+
+
+
 
 
 	vkDestroyDescriptorSetLayout(_device, _descLayout, nullptr);
@@ -392,23 +460,26 @@ int Renderer::StartTest()
 	return 0;
 }
 
-float Renderer::EndTest()
+void Renderer::EndTest(float & cputTime, float & gputTime)
 {
-
-	float avgTime = _frameTimes / _frameCount;
-
+	cputTime = _frameTimes / _frameCount;
+	gputTime = _gpuFrameTimes / _frameCount;
 	_frameCount = 0;
 	_testRunning = false;
-	return avgTime;
+	_frameTimes = 0.0;
+	_gpuFrameTimes = 0.0;
 }
 
 void Renderer::Render(void)
 {
-	_timer.TimeStart("Frame");
+
+	//_timer.TimeStart("FrameW");
 	vkQueueWaitIdle(_queue);
+//	_timer.TimeEnd("FrameW");
 
-	//printf("GPU Time: %f\n", _gpuTimer->GetTime(0));
+//	printf("%f\n", _timer.GetTime("FrameW"));
 
+	_timer.TimeStart("Frame");
 	// Begin rendering stuff while we potentially wait for swapchain image
 
 	// Flush the translations on the host to the gpu
@@ -416,27 +487,22 @@ void Renderer::Render(void)
 
 	(*this.*_currentRenderStrategy)();
 
-//	_SubmitCmdBuffer(_cmdBuffer, _queue);
 
-	//printf("Finished in: %f", _gpuTimer->GetTime(0));
-
-
-
-
-
+	_timer.TimeEnd("Frame");
 
 	// While the scene is rendering we can get the swapchain image and begin
 	// transitioning it. When it's time to blit we must synchronize to make
 	// sure that the image is finished for us to read. 
 	_BlitSwapchain();
-
-	_timer.TimeEnd("Frame");
+	vkQueueWaitIdle(_queue);
+	
 	if (_testRunning)
 	{
+		_gpuFrameTimes += _gpuTimer->GetTime(0);
 		_frameTimes += _timer.GetTime("Frame");
 		_frameCount++;
 	}
-	
+
 }
 
 Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
@@ -681,7 +747,7 @@ uint32_t Renderer::CreateTexture(const char * path)
 	if (_textures.size() == 1)
 	{
 		std::vector<VkWriteDescriptorSet> wds;
-		for (uint32_t i = 0; i < 2; i++)
+		for (uint32_t i = 0; i < 3; i++)
 		{
 			wds.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, 0, i, 1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, &vkdii, nullptr, nullptr));
 		}
@@ -733,6 +799,15 @@ const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationH
 	s.vertexCount = get<3>(_meshes[mesh]).NumFace * 3;
 	s.instanceCount = 1;
 	_vertexBufferHandler->CreateBuffer(&s, 1, VertexType::IndirectBuffer);
+
+
+	auto meshesPerThread = _renderMeshes.size() / NUM_SEC_BUFFERS;
+	for (uint8_t i = 0; i < NUM_SEC_BUFFERS; i++)
+	{
+		_recordOffset[i] = meshesPerThread * i;
+		_toRecord[i] = meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? (meshesPerThread > 0) ? _renderMeshes.size() % meshesPerThread : 0 : 1) ;
+	}
+	
 }
 
 const void Renderer::UpdateTranslation(const DirectX::XMMATRIX & translation, TranslationHandle translationHandle)
@@ -770,10 +845,11 @@ void Renderer::SetProjectionMatrix(const XMMATRIX & projection)
 	_UpdateViewProjection();
 }
 
-const void Renderer::FrustumCull(VkCommandBuffer & buffer, uint32_t start, uint32_t count)const
+const void Renderer::FrustumCull(VkCommandBuffer & buffer, uint8_t index)const
 {
 	BoundingOrientedBox bo;
-
+	auto start = _recordOffset[index];
+	auto count = _toRecord[index];
 	for (auto i = start; i < start + count; i++)
 	{
 		auto& meshHandle = get<0>(_renderMeshes[i]);
@@ -791,6 +867,8 @@ const void Renderer::FrustumCull(VkCommandBuffer & buffer, uint32_t start, uint3
 
 	
 	}
+
+
 	return void();
 }
 
@@ -924,8 +1002,10 @@ void Renderer::_UpdateFrustumPlanes()
 
 }
 
-const void Renderer::RecordDrawCalls(VkCommandBuffer & buffer, uint32_t start, uint32_t count) const
-{
+
+const void Renderer::RecordDrawCalls(VkCommandBuffer & buffer, uint8_t index)const {
+	auto start = _recordOffset[index];
+	auto count = _toRecord[index];
 	for (auto i = start; i < start + count; i++)
 	{
 		auto& meshHandle = get<0>(_renderMeshes[i]);
@@ -1025,19 +1105,17 @@ void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecor
 {
 	auto makeRenderPass = [this, cmdBuf, rerecord](VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)
 	{
-		if ((_doCulling || _doThreadedRecord) && rerecord)
+		if (rerecord && (_doCulling || _doThreadedRecord))
 		{
 			vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
-			std::thread threads[NUM_SEC_BUFFERS];
 
 			VkCommandBufferInheritanceInfo ini = {};
 			ini.renderPass = _renderPass;
 			ini.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
 			ini.framebuffer = _framebuffer;
 
-			auto meshesPerThread = _renderMeshes.size() / NUM_SEC_BUFFERS;
-
+		
 			for (int i = 0; i < NUM_SEC_BUFFERS; i++)
 			{
 				VkCommandBufferUsageFlags usageFlags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -1047,15 +1125,13 @@ void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecor
 				vkCmdSetScissor(_secBuffers[i], 0, 1, &scissor);
 
 				vkCmdBindDescriptorSets(_secBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
-
-				if(_doCulling)
-					threads[i] = std::thread(FrustumCullingThread, &_secBuffers[i], this, meshesPerThread * i, meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? _renderMeshes.size() % meshesPerThread : 0));
-				else
-					threads[i] = std::thread(RecordDrawCallsThread, &_secBuffers[i], this, meshesPerThread * i, meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? _renderMeshes.size() % meshesPerThread : 0));
+				
 			}
+			EnterSynchronizationBarrier(&barrier, SYNCHRONIZATION_BARRIER_FLAGS_NO_DELETE);
+			// Threads are working
+			EnterSynchronizationBarrier(&barrier, SYNCHRONIZATION_BARRIER_FLAGS_NO_DELETE);
 			for (int i = 0; i < NUM_SEC_BUFFERS; i++)
 			{
-				threads[i].join();
 				vkEndCommandBuffer(_secBuffers[i]);
 			}
 
@@ -2013,7 +2089,7 @@ void Renderer::_CreateDescriptorStuff()
 	/* Create the descriptor pool*/
 	std::vector<VkDescriptorPoolSize> _poolSizes;
 	_poolSizes.push_back(
-	{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2 });
+	{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 3 });
 	_poolSizes.push_back(
 	{ VK_DESCRIPTOR_TYPE_SAMPLER, 1 });
 	_poolSizes.push_back(
@@ -2032,7 +2108,7 @@ void Renderer::_CreateDescriptorStuff()
 	bindings.push_back({
 		(uint32_t)bindings.size(),
 		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-		2,
+		3,
 		VK_SHADER_STAGE_FRAGMENT_BIT,
 		nullptr
 	});

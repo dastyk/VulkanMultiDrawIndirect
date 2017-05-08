@@ -2,7 +2,7 @@
 
 
 
-GPUTimer::GPUTimer(VkDevice device, uint8_t queryLatency, float timestampPeriod) : _device(device), _maxCounters(20), _queryLatency(queryLatency), _freq(1e-6*(double)timestampPeriod)
+GPUTimer::GPUTimer(VkDevice device, uint8_t queryLatency, float timestampPeriod) : _device(device), _maxCounters(20), _queryLatency(queryLatency), _freq(1e-6*(double)timestampPeriod) // 1e-6 is for ms
 {
 	auto& info = VulkanHelpers::MakeQueryPoolCreateInfo(VK_QUERY_TYPE_TIMESTAMP, _queryLatency*_maxCounters*2);
 	VulkanHelpers::CreateQueryPool(_device, &info, &_pool);
@@ -27,6 +27,10 @@ const void GPUTimer::Start(VkCommandBuffer& buffer, uint64_t GUID)
 	auto& timer = _timers[GUID];
 	if (find == _timers.end())
 	{
+		if (_timers.size() > _maxCounters)
+		{
+			throw std::runtime_error("To many GPU timers, growing not supported.");
+		}
 		timer.currentFrame = 0;
 		timer.currentTimeFrame = 0;
 		timer.start = new uint32_t[_queryLatency];
@@ -39,10 +43,7 @@ const void GPUTimer::Start(VkCommandBuffer& buffer, uint64_t GUID)
 			timer.end[k] = latOff + 1;
 		}
 		
-		if (_timers.size() >= _maxCounters)
-		{
-			throw std::runtime_error("To many GPU timers, growing not supported.");
-		}
+	
 
 	}
 	else

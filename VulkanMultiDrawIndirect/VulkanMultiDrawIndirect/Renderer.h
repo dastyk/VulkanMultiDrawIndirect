@@ -13,6 +13,7 @@
 #include <fstream>
 #include "CPUTimer.h"
 #include <functional>
+#include <thread>
 
 #pragma comment(lib, "vulkan-1.lib")
 
@@ -73,9 +74,10 @@ public:
 	float GetAspect() { return (float)_width / _height; }
 
 
-	const void FrustumCull(VkCommandBuffer& buffer, uint32_t start, uint32_t count) const;
-	const void RecordDrawCalls(VkCommandBuffer& buffer, uint32_t start, uint32_t count) const;
+	const void FrustumCull(VkCommandBuffer& buffer, uint8_t index) const;
+	const void RecordDrawCalls(VkCommandBuffer& buffer, uint8_t index) const;
 private:
+
 	typedef void(Renderer::*RenderStrategyFP)();
 
 	void _UpdateFrustumPlanes();
@@ -145,14 +147,15 @@ private:
 
 public:
 	int StartTest();
-	float EndTest();
+	void EndTest(float& cputTime, float& gputTime);
 
 private:
 
 	CPUTimer _timer;
 	
 	uint32_t _frameCount;
-	float _frameTimes;
+	double _frameTimes;
+	double _gpuFrameTimes;
 	bool _testRunning;
 
 	uint32_t _width;
@@ -172,6 +175,8 @@ private:
 	static const uint8_t NUM_SEC_BUFFERS = 8;
 	VkCommandPool _secCmdPools[NUM_SEC_BUFFERS];
 	VkCommandBuffer _secBuffers[NUM_SEC_BUFFERS];
+	uint32_t _recordOffset[NUM_SEC_BUFFERS];
+	uint32_t _toRecord[NUM_SEC_BUFFERS];
 
 	VkQueue _queue;
 	VkDebugReportCallbackEXT _debugCallback;
@@ -202,6 +207,8 @@ private:
 
 	DirectX::BoundingFrustum _frustum;
 	DirectX::BoundingFrustum _frustumTransformed;
+
+	std::thread _threads[NUM_SEC_BUFFERS];
 	void _IndirectGPUCulling();
 	bool _doThreadedRecord;
 

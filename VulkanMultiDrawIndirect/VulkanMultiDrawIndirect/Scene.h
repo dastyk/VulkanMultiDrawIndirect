@@ -37,7 +37,10 @@ private:
 	float _frameTimes;
 	bool _testRunning;
 	std::vector<Object> _objects;
+	std::vector<float> _objectOffsetAngles;
 
 	std::ofstream out;
+
+	bool _update = false;
 };
 
