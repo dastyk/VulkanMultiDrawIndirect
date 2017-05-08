@@ -36,6 +36,7 @@ const void ThreadEntry(VkCommandBuffer* buffer, const Renderer* renderer, uint8_
 
 
 Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderTraditionalRecord), _doThreadedRecord(true), _doCulling(true), _testRunning(false)
+, _doBatching(false), _batchCount(1000)
 {
 
 	InitializeSynchronizationBarrier(&barrier, NUM_SEC_BUFFERS + 1, 100);
@@ -137,7 +138,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 	VulkanHelpers::AllocateCommandBuffers(_device, &_blitCmdBuffer, _mostlyDynamicCmdPool);
 	VulkanHelpers::AllocateCommandBuffers(_device, &_traditionalCmdB, _mostlyStaticCmdPool);
 	VulkanHelpers::AllocateCommandBuffers(_device, &_indirectResubmitCmdBuf, _mostlyStaticCmdPool);
-
+	VulkanHelpers::AllocateCommandBuffers(_device, _batchBuffers, _mostlyDynamicCmdPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, MAX_BATCH_BUFFERS);
 
 	for (uint8_t i = 0; i < NUM_SEC_BUFFERS; i++)
 	{
@@ -216,7 +217,20 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 				printf("\n -c [on/off]\t\t Render with frustum culling.\n");
 			}
 		}
+		if (DebugUtils::GetArg("-b", &opt, argc, argv))
+		{
+			if (std::string("on") == opt)
+			{
+				r->_doBatching = true;
+				oO = true;
+			}
+			else if (std::string("off") == opt)
+			{
+				r->_doBatching = false;
+				oO = true;
+			}
 
+		}
 		if (DebugUtils::GetArg("-m", &opt, argc, argv))
 		{
 			if (std::string("on") == opt)
@@ -853,8 +867,6 @@ void Renderer::_UpdateViewProjection()
 // work with a dynamic scene.
 void Renderer::_RenderTraditionalRecord()
 {
-	_RecordTraditionalCmdBuffer(_cmdBuffer, true);
-
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.pNext = nullptr;
@@ -865,7 +877,25 @@ void Renderer::_RenderTraditionalRecord()
 	submitInfo.pCommandBuffers = &_cmdBuffer;
 	submitInfo.signalSemaphoreCount = 0;
 	submitInfo.pSignalSemaphores = nullptr;
-	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+	if (_doBatching)
+	{
+
+		uint32_t batches = _renderMeshes.size() / _batchCount + 1;
+		for (uint32_t i = 0; i < batches; i++)
+		{
+			_RecordBatch(_batchBuffers[i], _batchCount*i, i + 1 == batches ? _renderMeshes.size() - i*_batchCount : _batchCount);
+			submitInfo.pCommandBuffers = &_batchBuffers[i];
+			
+			vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+		}
+	}
+	else
+	{
+		_RecordTraditionalCmdBuffer(_cmdBuffer, true);
+		submitInfo.pCommandBuffers = &_cmdBuffer;
+
+		vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+	}
 }
 
 void Renderer::_RenderTraditionalResubmit()
@@ -948,6 +978,7 @@ void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecor
 
 	_RecordCmdBuffer(cmdBuf, rerecord, makeRenderPass);
 }
+
 
 void Renderer::_RenderIndirectRecord()
 {
@@ -1897,6 +1928,35 @@ void Renderer::_CreateDescriptorStuff()
 
 	/*Update the descriptor set with the binding data*/
 	vkUpdateDescriptorSets(_device, WriteDS.size(), WriteDS.data(), 0, nullptr);
+}
+
+void Renderer::_RecordBatch(VkCommandBuffer & buffer, uint32_t offset, uint32_t count)
+{
+	auto makeRenderPass = [this, buffer, offset, count](VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)
+	{
+
+		vkCmdBeginRenderPass(buffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+
+		vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+		vkCmdSetViewport(buffer, 0, 1, &viewport);
+		vkCmdSetScissor(buffer, 0, 1, &scissor);
+		vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
+
+		for (uint32_t i = offset; i < offset + count; i++)
+		{
+			auto& mesh = _renderMeshes[i];
+			auto& meshHandle = get<0>(mesh);
+
+			const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
+			vkCmdDraw(buffer, meshData.NumFace * 3, 1, 0, i);
+		}
+
+		vkCmdEndRenderPass(buffer);
+
+	};
+
+	_RecordCmdBuffer(buffer, true, makeRenderPass);
 }
 
 void Renderer::_CreateVPUniformBuffer()

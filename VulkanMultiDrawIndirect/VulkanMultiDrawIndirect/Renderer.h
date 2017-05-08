@@ -71,6 +71,7 @@ private:
 	void _RenderTraditionalRecord(void);
 	void _RenderTraditionalResubmit(void);
 	void _RecordTraditionalCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecord);
+
 	void _RenderIndirectRecord(void);
 	void _RenderIndirectResubmit(void);
 	void _RecordIndirectCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecord);
@@ -115,7 +116,7 @@ private:
 	void _CreatePipeline(void);
 	void _CreateDescriptorStuff();
 
-
+	void _RecordBatch(VkCommandBuffer& buffer, uint32_t offset, uint32_t count);
 public:
 	int StartTest();
 	void EndTest(float& cputTime, float& gputTime);
@@ -142,7 +143,8 @@ private:
 	VkCommandBuffer _traditionalCmdB;
 	VkCommandBuffer _blitCmdBuffer;
 	VkCommandBuffer _indirectResubmitCmdBuf;
-
+#define MAX_BATCH_BUFFERS 100
+	VkCommandBuffer _batchBuffers[MAX_BATCH_BUFFERS];
 	static const uint8_t NUM_SEC_BUFFERS = 8;
 	VkCommandPool _secCmdPools[NUM_SEC_BUFFERS];
 	VkCommandBuffer _secBuffers[NUM_SEC_BUFFERS];
@@ -169,6 +171,8 @@ private:
 
 
 	bool _doCulling;
+	bool _doBatching;
+	uint32_t _batchCount;
 	DirectX::BoundingFrustum _frustum;
 	DirectX::BoundingFrustum _frustumTransformed;
 
