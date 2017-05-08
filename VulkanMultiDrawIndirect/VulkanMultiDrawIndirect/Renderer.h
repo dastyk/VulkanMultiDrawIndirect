@@ -28,6 +28,24 @@ class Renderer
 		uint32_t Texture;
 	};
 
+	struct GPUFriendlyBB
+	{
+		float px, py, pz;
+		float padding;
+		float ex, ey, ez;
+		float padding2;
+	};
+
+	struct GPUFriendlyFrustum
+	{
+		DirectX::XMFLOAT4 planes[6];
+		//float lpx, lpy, lpz, lpd; //Left plane
+		//float rpx, rpy, rpz, rpd; //Right plane
+		//float bpx, bpy, bpz, bpd; //Bottom plane
+		//float tpx, tpy, tpz, tpd; //Top plane
+		//float npx, npy, npz, npd; //near plane
+		//float fpx, fpy, fpz, fpd; //Far plane
+	};
 
 public:
 	typedef uint32_t MeshHandle;
@@ -62,6 +80,7 @@ private:
 
 	typedef void(Renderer::*RenderStrategyFP)();
 
+	void _UpdateFrustumPlanes();
 	void _UpdateViewProjection();
 
 	RenderStrategyFP _currentRenderStrategy;
@@ -93,7 +112,9 @@ private:
 	void _CreateShaders(void);
 	void _CreateShader(const char* shaderCode, VkShaderModule& shader);
 	void _CreateVPUniformBuffer();
+	void _CreateCullingBuffer();
 	void _CreateSampler();
+	void _ComputeStuff();
 
 	struct VPUniformBuffer
 	{
@@ -112,9 +133,18 @@ private:
 
 
 	};
+
+	struct GPUCullUniformBuffer
+	{
+		GPUFriendlyFrustum frustum;
+
+	};
 	void _CreatePipelineLayout(void);
 	void _CreatePipeline(void);
+	void _CreateComputePipeline();
 	void _CreateDescriptorStuff();
+
+	VPUniformBuffer testC;
 
 	void _RecordBatch(VkCommandBuffer& buffer, uint32_t offset, uint32_t count);
 public:
@@ -171,12 +201,20 @@ private:
 
 
 	bool _doCulling;
+	bool _doCullingGPU = false;
+	GPUCullUniformBuffer _CullingInfo;
+	VkBuffer _CullingBuffer;
+	VkDeviceMemory _CullingMemory;
+	VkBuffer _CullingStagingBuffer;
+	VkDeviceMemory _CullingStagingMemory;
+
 	bool _doBatching;
 	uint32_t _batchCount;
 	DirectX::BoundingFrustum _frustum;
 	DirectX::BoundingFrustum _frustumTransformed;
 
 	std::thread _threads[NUM_SEC_BUFFERS];
+	void _IndirectGPUCulling();
 	bool _doThreadedRecord;
 
 	std::vector<DirectX::XMFLOAT4X4> _translations;
@@ -189,6 +227,10 @@ private:
 	VkDescriptorPool _descPool;
 	VkDescriptorSetLayout _descLayout;
 	VkDescriptorSet _descSet;
+
+	VkDescriptorPool _compDescPool;
+	VkDescriptorSetLayout _compDescLayout;
+	VkDescriptorSet _compDescSet;
 
 	std::unordered_map<std::string, uint32_t> _StringToTextureHandle;
 	std::vector<Texture2D> _textures;
@@ -205,9 +247,12 @@ private:
 	VkFramebuffer _framebuffer = VK_NULL_HANDLE;
 	VkShaderModule _vertexShader = VK_NULL_HANDLE;
 	VkShaderModule _fragmentShader = VK_NULL_HANDLE;
+	VkShaderModule _computeShader = VK_NULL_HANDLE;
 	VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
+	VkPipelineLayout _compPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline _pipeline = VK_NULL_HANDLE;
 	VkPipeline _indirectPipeline = VK_NULL_HANDLE;
+	VkPipeline _computePipeline = VK_NULL_HANDLE;
 
 	VertexBufferHandler* _vertexBufferHandler;
 

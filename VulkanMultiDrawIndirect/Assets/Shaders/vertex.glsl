@@ -14,6 +14,7 @@ layout(constant_id = 0) const uint INDIRECT_RENDERING = 0;
 #define INDEX 7
 
 
+
 layout(set = 0, binding = POSITION, rgba32f) uniform imageBuffer g_Positions;
 layout(set = 0, binding = TEXCOORD, rg32f) uniform imageBuffer g_Texcoords;
 
@@ -59,7 +60,9 @@ layout(location = 1) out uint o_TextureID;
 
 void main()
 {
-	IndexStruct indices = g_Indices[INDIRECT_RENDERING == 1 ? gl_DrawIDARB : gl_BaseInstanceARB];
+	IndexStruct indices = g_Indices[INDIRECT_RENDERING == 1 ? gl_DrawIDARB: gl_BaseInstanceARB];
+	
+	
 	mat4 world = g_Translations[indices.Translation];
 	gl_Position = vec4(imageLoad(g_Positions, int(indices.Position) + gl_VertexIndex).xyz, 1.0f) * world * g_View * g_Proj;
 

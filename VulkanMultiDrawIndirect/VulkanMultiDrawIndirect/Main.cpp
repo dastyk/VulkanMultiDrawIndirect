@@ -114,13 +114,13 @@ int main(int argc, char** argv)
 			const float degreesPerSecond = 180.0f;
 
 			if (input.IsKeyDown(SDLK_w))
-				scene._camera.MoveForward(dt * 10.0f);
+				scene._camera.MoveForward(dt * 30.0f);
 			if (input.IsKeyDown(SDLK_a))
-				scene._camera.MoveRight(dt * -10.0f);
+				scene._camera.MoveRight(dt * -30.0f);
 			if (input.IsKeyDown(SDLK_s))
-				scene._camera.MoveForward(dt * -10.0f);
+				scene._camera.MoveForward(dt * -30.0f);
 			if (input.IsKeyDown(SDLK_d))
-				scene._camera.MoveRight(dt * 10.0f);
+				scene._camera.MoveRight(dt * 30.0f);
 			if (input.IsKeyDown(SDLK_RIGHT))
 				scene._camera.RotateYaw(degreesPerSecond * dt);
 			if (input.IsKeyDown(SDLK_LEFT))
@@ -134,8 +134,15 @@ int main(int argc, char** argv)
 			IF_KEY_DOWN(SDLK_LCTRL)
 				scene._camera.MoveUp(dt * -10.0f);
 			if (input.IsKeyDown(SDLK_ESCAPE))
-
 				quit = true;
+
+			IF_KEY_DOWN(SDLK_o)
+			{
+				float x = scene._camera.GetActiveCamera().position.x;
+				float y = scene._camera.GetActiveCamera().position.y;
+				float z = scene._camera.GetActiveCamera().position.z;
+				printf("%.1f, %.1f, %.1f\n", x, y, z);
+			}
 			
 
 			scene.Frame(timer.DeltaTime());

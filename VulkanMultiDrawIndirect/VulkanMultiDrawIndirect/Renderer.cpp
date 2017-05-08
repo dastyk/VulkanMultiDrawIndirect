@@ -8,7 +8,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 #include <ConsoleThread.h>
-
+ 
 
 using namespace DirectX;
 using namespace std;
@@ -86,23 +86,25 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 	/***************Make sure the device has a queue that can handle rendering*****************/
 	auto queueFamInfo = VulkanHelpers::EnumeratePhysicalDeviceQueueFamilyProperties(_instance);
 	size_t queueIndex = -1;
-
+	size_t computeQueueIndex = -1;
+	
 	for (uint32_t i = 0; i < queueFamInfo[0].size(); i++)
 	{
-		if (queueFamInfo[0][i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+		//The same queue can do both on a 1080, so keeping it simple
+		if (queueFamInfo[0][i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT))
 		{
 			queueIndex = i;
 			break;
 		}
+		
 	}
 	if (queueIndex == -1)
-		throw std::runtime_error("No queue can render");
-	
-
+		throw std::runtime_error("No queue can render and compute");
 
 	/*************Create the device**************/
 	float queuePriority = 1.0f;
 	auto queueInfo = VulkanHelpers::MakeDeviceQueueCreateInfo(queueIndex, 1, &queuePriority);
+	
 	vector<const char*> deviceExtensions = { "VK_KHR_swapchain", "VK_KHR_shader_draw_parameters" };
 	VkPhysicalDeviceFeatures vpdf = {};
 	vpdf.shaderStorageImageExtendedFormats = VK_TRUE;
@@ -165,11 +167,14 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 
 
 	_CreateVPUniformBuffer();
+	_CreateCullingBuffer();
 	_CreateSampler();
 	_CreateDescriptorStuff();
+	_ComputeStuff();
 	_CreateShaders();
 	_CreatePipelineLayout();
 	_CreatePipeline();
+	_CreateComputePipeline();
 
 
 /*
@@ -206,6 +211,8 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 			{
 				r->_doCulling = true;
 				oO = true;
+				if (r->_doCullingGPU)
+					printf("Warning. GPU frustum culling is already on.\n");
 			}
 			else if (std::string("off") == opt)
 			{
@@ -230,7 +237,30 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 				oO = true;
 			}
 
+		if (DebugUtils::GetArg("-gpuc", &opt, argc, argv))
+		{
+			if (std::string("on") == opt)
+			{
+				r->_doCullingGPU = true;
+				if (r->_doCulling)
+					printf("Warning. CPU frustum culling is already on.\n");
+				if (r->_currentRenderStrategy != &Renderer::_RenderIndirectRecord && r->_currentRenderStrategy != &Renderer::_RenderIndirectResubmit)
+					printf("Warning. GPU culling only works with indirect rendering.\n");
+				oO = true;
+			}
+			else if (std::string("off") == opt)
+			{
+				r->_doCullingGPU = false;
+				oO = true;
+			}
+			else
+			{
+				printf("\n -c [on/off]\t\t Render with frustum culling on the GPU.\n");
+				printf("\t\t Only works with indirect rendering.\n");
+			}
+		
 		}
+
 		if (DebugUtils::GetArg("-m", &opt, argc, argv))
 		{
 			if (std::string("on") == opt)
@@ -347,6 +377,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 		printf("\t -r\t\t Record the command buffer each frame.\n");
 		printf("\t -s\t\t Resubmit a pre-recorded command buffer.\n");
 		printf("\t -c [on/off]\t\t Render with frustum culling.\n");
+		printf("\t -gpuc [on/off]\t\t Render with frustum culling on the GPU");
 		},
 		"strat",
 		"Sets the rendering strategy."
@@ -377,13 +408,18 @@ Renderer::~Renderer()
 	vkDestroyDescriptorSetLayout(_device, _descLayout, nullptr);
 
 	vkDestroyDescriptorPool(_device, _descPool, nullptr);
+	vkDestroyDescriptorSetLayout(_device, _compDescLayout, nullptr);
+	vkDestroyDescriptorPool(_device, _compDescPool, nullptr);
 	delete _vertexBufferHandler;
 	delete _gpuTimer;
 	vkDestroyPipeline(_device, _indirectPipeline, nullptr);
 	vkDestroyPipeline(_device, _pipeline, nullptr);
+	vkDestroyPipeline(_device, _computePipeline, nullptr);
 	vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
+	vkDestroyPipelineLayout(_device, _compPipelineLayout, nullptr);
 	vkDestroyShaderModule(_device, _vertexShader, nullptr);
 	vkDestroyShaderModule(_device, _fragmentShader, nullptr);
+	vkDestroyShaderModule(_device, _computeShader, nullptr);
 	vkDestroyFramebuffer(_device, _framebuffer, nullptr);
 	vkDestroyRenderPass(_device, _renderPass, nullptr);
 	vkDestroyImageView(_device, _depthBufferImageView, nullptr);
@@ -400,6 +436,12 @@ Renderer::~Renderer()
 	vkFreeMemory(_device, _VPUniformBufferMemory, nullptr);
 	vkDestroyBuffer(_device, _VPUniformBufferStaging, nullptr);
 	vkFreeMemory(_device, _VPUniformBufferMemoryStaging, nullptr);
+
+	vkDestroyBuffer(_device, _CullingBuffer, nullptr);
+	vkDestroyBuffer(_device, _CullingStagingBuffer, nullptr);
+	vkFreeMemory(_device, _CullingStagingMemory, nullptr);
+	vkFreeMemory(_device, _CullingMemory, nullptr);
+
 	vkDestroySampler(_device, _sampler, nullptr);
 	vkFreeMemory(_device, _offscreenImageMemory, nullptr);
 	vkDestroyImage(_device, _offscreenImage, nullptr);
@@ -758,6 +800,12 @@ const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationH
 	pushConstants.Translation = get<0>(_translationOffsets[translation]);
 	pushConstants.Texture = texture;
 	_vertexBufferHandler->CreateBuffer(&pushConstants, 8, VertexType::Index);
+	
+	GPUFriendlyBB bb = {};
+	BoundingBox& dxbb = get<4>(_meshes[mesh]);
+	bb.px = dxbb.Center.x; bb.py = dxbb.Center.y; bb.pz = dxbb.Center.z;
+	bb.ex = dxbb.Extents.x; bb.ey = dxbb.Extents.y; bb.ez = dxbb.Extents.z;
+	_vertexBufferHandler->CreateBuffer(&bb, 1, VertexType::Bounding);
 
 	VkDrawIndirectCommand s = {};
 	s.vertexCount = get<3>(_meshes[mesh]).NumFace * 3;
@@ -782,6 +830,7 @@ const void Renderer::UpdateTranslation(const DirectX::XMMATRIX & translation, Tr
 
 void Renderer::SetViewMatrix(const XMMATRIX & view)
 {
+	XMStoreFloat4x4(&testC.view, view);
 	XMStoreFloat4x4(&_ViewProjection.view, XMMatrixTranspose(view));
 	_frustum.Transform(_frustumTransformed,XMMatrixInverse(nullptr, view));
 
@@ -804,6 +853,7 @@ void Renderer::SetProjectionMatrix(const XMMATRIX & projection)
 
 	BoundingFrustum::CreateFromMatrix(_frustum, projection);
 
+	XMStoreFloat4x4(&testC.projection, projection);
 	_UpdateViewProjection();
 }
 
@@ -834,6 +884,137 @@ const void Renderer::FrustumCull(VkCommandBuffer & buffer, uint8_t index)const
 	return void();
 }
 
+void Renderer::_UpdateFrustumPlanes()
+{
+
+	XMFLOAT4 fPlanes[6];
+	
+	XMMATRIX View = XMLoadFloat4x4(&testC.view);
+	XMMATRIX Projection = XMLoadFloat4x4(&testC.projection);
+	Projection = XMMatrixScaling(1.0f, -1.0, 1.0f) * Projection;
+	XMMATRIX viewProj = View * Projection; /*Get the plane equations in world space*/
+	XMFLOAT4 r1, r2, r3, r4; /* Each row of the view*projection */
+	XMStoreFloat4(&r1, viewProj.r[0]);
+	XMStoreFloat4(&r2, viewProj.r[1]);
+	XMStoreFloat4(&r3, viewProj.r[2]);
+	XMStoreFloat4(&r4, viewProj.r[3]);
+
+	/*Left plane, fourth column + first column*/
+	fPlanes[0].x = r1.w + r1.x;
+	fPlanes[0].y = r2.w + r2.x;
+	fPlanes[0].z = r3.w + r3.x;
+	fPlanes[0].w = r4.w + r4.x;
+
+	/*right plane, fourth column - first column*/
+	fPlanes[1].x = r1.w - r1.x;
+	fPlanes[1].y = r2.w - r2.x;
+	fPlanes[1].z = r3.w - r3.x;
+	fPlanes[1].w = r4.w - r4.x;
+
+	/*Top plane, fourth column - second column*/
+	fPlanes[2].x = r1.w - r1.y;
+	fPlanes[2].y = r2.w - r2.y;
+	fPlanes[2].z = r3.w - r3.y;
+	fPlanes[2].w = r4.w - r4.y;
+
+	/*Bottom plane, fourth column + second column*/
+	fPlanes[3].x = r1.w + r1.y;
+	fPlanes[3].y = r2.w + r2.y;
+	fPlanes[3].z = r3.w + r3.y;
+	fPlanes[3].w = r4.w + r4.y;
+
+	/*NEar plane, fourth column + third column*/
+	/* Just the third column?*/
+	fPlanes[4].x = r1.z;//r1.w + r1.z;
+	fPlanes[4].y = r2.z;//r2.w + r2.z;
+	fPlanes[4].z = r3.z;//r3.w + r3.z;
+	fPlanes[4].w = r4.z;//r4.w + r4.z;
+
+	/*Far plane, fourth column - third column*/
+	fPlanes[5].x = r1.w - r1.z;
+	fPlanes[5].y = r2.w - r2.z;
+	fPlanes[5].z = r3.w - r3.z;
+	fPlanes[5].w = r4.w - r4.z;
+
+	/*Normalize the planes*/
+	for (int i = 0; i < 6; i++)
+	{
+		float length = sqrtf((fPlanes[i].x * fPlanes[i].x) + (fPlanes[i].y * fPlanes[i].y) + (fPlanes[i].z * fPlanes[i].z));
+		fPlanes[i].x /= length;
+		fPlanes[i].y /= length;
+		fPlanes[i].z /= length;
+		fPlanes[i].w /= length;
+	}
+
+	memcpy(&_CullingInfo, fPlanes, sizeof(GPUCullUniformBuffer));
+	//XMMATRIX v = XMLoadFloat4x4(&_ViewProjection.view);
+	//XMMATRIX p = XMLoadFloat4x4(&_ViewProjection.projection);
+	//XMFLOAT4X4 vp;
+	//XMStoreFloat4x4(&vp, XMMatrixTranspose(v * p));
+	//auto& f = _CullingInfo.frustum;
+
+	////Left plane, column 4 + column 1
+	//f.lpx = vp._14 + vp._11;
+	//f.lpy = vp._24 + vp._21;
+	//f.lpz = vp._34 + vp._31;
+	//f.lpd = vp._44 + vp._41;
+
+	////Right plane, column 4 - column 1
+	//f.rpx = vp._14 - vp._11;
+	//f.rpy = vp._24 - vp._21;
+	//f.rpz = vp._34 - vp._31;
+	//f.rpd = vp._44 - vp._41;
+
+	////Bottom plane, column 4 + column2
+	//f.bpx = vp._14 + vp._12;
+	//f.bpy = vp._24 + vp._22;
+	//f.bpz = vp._34 + vp._32;
+	//f.bpd = vp._44 + vp._42;
+
+	////Top plane, column4 - column2
+	//f.tpx = vp._14 - vp._12;
+	//f.tpy = vp._24 - vp._22;
+	//f.tpz = vp._34 - vp._32;
+	//f.tpd = vp._44 - vp._42;
+
+	////Near plane, column 4 + column 3
+	//f.npx = vp._14 + vp._13;
+	//f.npy = vp._14 + vp._23;
+	//f.npz = vp._14 + vp._33;
+	//f.npd = vp._14 + vp._43;
+
+	////Far plane, column4 - column 3
+	//f.fpx = vp._14 - vp._13;
+	//f.fpy = vp._24 - vp._23;
+	//f.fpz = vp._34 - vp._33;
+	//f.fpd = vp._44 - vp._43;
+
+	//float* ele = (float*)&f;
+	//for (int i = 0; i < 16; i += 4)
+	//{
+	//	float length = sqrtf(ele[i] * ele[i] + ele[i + 1] * ele[i + 1] + ele[i + 2] * ele[i + 2]);
+	//	ele[i] /= length;
+	//	ele[i + 1] /= length;
+	//	ele[i + 2] /= length;
+	//	ele[i + 3] /= length;
+	//}
+	
+	void* dst;
+	VulkanHelpers::MapMemory(_device, _CullingStagingMemory, &dst, sizeof(GPUCullUniformBuffer));
+	memcpy(dst, &_CullingInfo, sizeof(GPUCullUniformBuffer));
+	vkUnmapMemory(_device, _CullingStagingMemory);
+
+	vkQueueWaitIdle(_queue);
+	VulkanHelpers::BeginCommandBuffer(_cmdBuffer);
+	VulkanHelpers::CopyDataBetweenBuffers(_cmdBuffer, _CullingStagingBuffer, 0, _CullingBuffer, 0, sizeof(GPUCullUniformBuffer));
+	vkEndCommandBuffer(_cmdBuffer);
+	auto& sInfo = VulkanHelpers::MakeSubmitInfo(1, &_cmdBuffer);
+	VulkanHelpers::QueueSubmit(_queue, 1, &sInfo);
+	vkQueueWaitIdle(_queue);
+
+}
+
+
 const void Renderer::RecordDrawCalls(VkCommandBuffer & buffer, uint8_t index)const {
 	auto start = _recordOffset[index];
 	auto count = _toRecord[index];
@@ -848,6 +1029,7 @@ const void Renderer::RecordDrawCalls(VkCommandBuffer & buffer, uint8_t index)con
 
 void Renderer::_UpdateViewProjection()
 {
+	_UpdateFrustumPlanes();
 	void* src;
 	VulkanHelpers::MapMemory(_device, _VPUniformBufferMemoryStaging, &src, sizeof(VPUniformBuffer));
 	memcpy(src, &_ViewProjection, sizeof(VPUniformBuffer));
@@ -898,6 +1080,40 @@ void Renderer::_RenderTraditionalRecord()
 	}
 }
 
+
+void Renderer::_IndirectGPUCulling()
+{
+	VkCommandBufferBeginInfo commandBufBeginInfo = {};
+	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	commandBufBeginInfo.pNext = nullptr;
+	commandBufBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	commandBufBeginInfo.pInheritanceInfo = nullptr;
+
+	vkBeginCommandBuffer(_cmdBuffer, &commandBufBeginInfo);
+
+	//_gpuTimer->Start(_cmdBuffer, 0);
+
+	//Do culling
+
+
+	vkCmdBindPipeline(_cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, _computePipeline);
+	vkCmdBindDescriptorSets(_cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, _compPipelineLayout, 0, 1, &_compDescSet, 0, nullptr);
+	vkCmdDispatch(_cmdBuffer, _renderMeshes.size(), 1, 1);
+
+	vkEndCommandBuffer(_cmdBuffer);
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.pNext = nullptr;
+	submitInfo.waitSemaphoreCount = 0;
+	submitInfo.pWaitSemaphores = nullptr;
+	submitInfo.pWaitDstStageMask = nullptr;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &_cmdBuffer;
+	submitInfo.signalSemaphoreCount = 0;
+	submitInfo.pSignalSemaphores = nullptr;
+	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(_queue);
+}
 void Renderer::_RenderTraditionalResubmit()
 {
 	VkSubmitInfo submitInfo = {};
@@ -984,8 +1200,12 @@ void Renderer::_RenderIndirectRecord()
 {
 	//_vertexBufferHandler->FlushBuffer(VertexType::Translation);
 	_vertexBufferHandler->FlushBuffer(VertexType::IndirectBuffer);
-
+	if(_doCullingGPU)
+		_IndirectGPUCulling();
+	
 	_RecordIndirectCmdBuffer(_cmdBuffer, true);
+
+	
 
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1004,7 +1224,8 @@ void Renderer::_RenderIndirectResubmit()
 {
 	//_vertexBufferHandler->FlushBuffer(VertexType::Translation);
 	_vertexBufferHandler->FlushBuffer(VertexType::IndirectBuffer);
-
+	if (_doCullingGPU)
+		_IndirectGPUCulling();
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.pNext = nullptr;
@@ -1631,6 +1852,7 @@ void Renderer::_CreateShaders(void)
 {
 	_CreateShader("../Assets/Shaders/vertex.spv", _vertexShader);
 	_CreateShader("../Assets/Shaders/fragment.spv", _fragmentShader);
+	_CreateShader("../Assets/Shaders/compute.spv", _computeShader);
 }
 
 void Renderer::_CreateShader(const char * shaderCode, VkShaderModule & shader)
@@ -1852,6 +2074,45 @@ void Renderer::_CreatePipeline(void)
 	}
 }
 
+void Renderer::_CreateComputePipeline()
+{
+
+	VkPipelineLayoutCreateInfo layoutInfo = {};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	layoutInfo.pNext = nullptr;
+	layoutInfo.flags = 0;
+	layoutInfo.pSetLayouts = &_compDescLayout;
+	layoutInfo.setLayoutCount = 1;
+	layoutInfo.pushConstantRangeCount = 0;
+	layoutInfo.pPushConstantRanges = nullptr;
+
+	VkResult result = vkCreatePipelineLayout(_device, &layoutInfo, nullptr, &_compPipelineLayout);
+	if (result != VK_SUCCESS)
+		throw runtime_error("Failed to create pipeline layout (compute)");
+
+	VkPipelineShaderStageCreateInfo stage = {};
+	stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stage.pNext = nullptr;
+	stage.pName = "main";
+	stage.pSpecializationInfo = nullptr;
+	stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	stage.module = _computeShader;
+
+	VkComputePipelineCreateInfo pipelineInfo = {};
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	pipelineInfo.pNext = nullptr;
+	pipelineInfo.flags = 0;
+	pipelineInfo.layout = _compPipelineLayout;
+	pipelineInfo.basePipelineHandle = nullptr;
+	pipelineInfo.stage = stage;
+	pipelineInfo.basePipelineIndex = -1;
+	
+	result = vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &_computePipeline);
+	if (result != VK_SUCCESS)
+		throw runtime_error("Failed to create compute pipleline");
+
+}
+
 void Renderer::_CreateDescriptorStuff()
 {
 	/* Create the descriptor pool*/
@@ -1862,6 +2123,7 @@ void Renderer::_CreateDescriptorStuff()
 	{ VK_DESCRIPTOR_TYPE_SAMPLER, 1 });
 	_poolSizes.push_back(
 	{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 });
+	
 	auto& dps = _vertexBufferHandler->GetDescriptorPoolSizes();
 	_poolSizes.insert(_poolSizes.end(), dps.begin(), dps.end());
 
@@ -1893,6 +2155,7 @@ void Renderer::_CreateDescriptorStuff()
 		VK_SHADER_STAGE_VERTEX_BIT,
 		nullptr
 	});
+
 	auto& dslb = _vertexBufferHandler->GetDescriptorSetLayoutBindings(3);
 	bindings.insert(bindings.end(), dslb.begin(), dslb.end());
 
@@ -1923,7 +2186,6 @@ void Renderer::_CreateDescriptorStuff()
 		VK_DESCRIPTOR_TYPE_SAMPLER,
 		&dii, nullptr, nullptr));
 
-	
 	
 
 	/*Update the descriptor set with the binding data*/
@@ -1983,6 +2245,14 @@ void Renderer::_CreateVPUniformBuffer()
 
 }
 
+void Renderer::_CreateCullingBuffer()
+{
+	VkDeviceSize size = sizeof(GPUCullUniformBuffer);
+	VulkanHelpers::CreateBuffer(_devices[0], _device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &_CullingStagingBuffer, &_CullingStagingMemory);
+	VulkanHelpers::CreateBuffer(_devices[0], _device, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &_CullingBuffer, &_CullingMemory);
+
+}
+
 void Renderer::_CreateSampler()
 {
 	VkSamplerCreateInfo info = {};
@@ -2003,6 +2273,79 @@ void Renderer::_CreateSampler()
 	info.mipLodBias = 0;
 
 	vkCreateSampler(_device, &info, nullptr, &_sampler);
+
+}
+
+void Renderer::_ComputeStuff()
+{
+	std::vector<VkDescriptorPoolSize> _poolSizes;
+	_poolSizes.push_back(
+	{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 });
+	_poolSizes.push_back(
+	{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 });
+	VulkanHelpers::CreateDescriptorPool(_device, &_compDescPool, 0, 10, _poolSizes.size(), _poolSizes.data());
+
+	std::vector<VkDescriptorSetLayoutBinding> bindings;
+	bindings.push_back({
+		0,
+		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		1,
+		VK_SHADER_STAGE_COMPUTE_BIT,
+		nullptr
+	});
+	bindings.push_back({
+		1,
+		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		1,
+		VK_SHADER_STAGE_COMPUTE_BIT,
+		nullptr
+	});
+	bindings.push_back({
+		2,
+		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		1,
+		VK_SHADER_STAGE_COMPUTE_BIT,
+		nullptr
+	});
+	bindings.push_back({
+		3,
+		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		1,
+		VK_SHADER_STAGE_COMPUTE_BIT,
+		nullptr
+	});
+
+
+	VulkanHelpers::CreateDescriptorSetLayout(_device, &_compDescLayout, bindings.size(), bindings.data());
+	VulkanHelpers::AllocateDescriptorSets(_device, _compDescPool, 1, &_compDescLayout, &_compDescSet);
+
+	std::vector<VkWriteDescriptorSet> WriteDS;
+
+	VkDescriptorBufferInfo dbi = {};
+	dbi.buffer = _vertexBufferHandler->GetBuffer(VertexType::IndirectBuffer);
+	dbi.offset = 0;
+	dbi.range = VK_WHOLE_SIZE;
+	WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_compDescSet, 0, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &dbi, nullptr, nullptr));
+
+	VkDescriptorBufferInfo dbi2 = {};
+	dbi2.buffer = _vertexBufferHandler->GetBuffer(VertexType::Bounding);
+	dbi2.offset = 0;
+	dbi2.range = VK_WHOLE_SIZE;
+	WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_compDescSet, 1, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &dbi2, nullptr, nullptr));
+
+	VkDescriptorBufferInfo dbi3 = {};
+	dbi3.buffer = _vertexBufferHandler->GetBuffer(VertexType::Translation);
+	dbi3.offset = 0;
+	dbi3.range = VK_WHOLE_SIZE;
+	WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_compDescSet, 2, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &dbi3, nullptr, nullptr));
+
+	VkDescriptorBufferInfo dbi4 = {};
+	dbi4.buffer = _CullingBuffer;
+	dbi4.offset = 0;
+	dbi4.range = VK_WHOLE_SIZE;
+	WriteDS.push_back(VulkanHelpers::MakeWriteDescriptorSet(_compDescSet, 3, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &dbi4, nullptr, nullptr));
+
+	vkUpdateDescriptorSets(_device, WriteDS.size(), WriteDS.data(), 0, nullptr);
 
 }
 

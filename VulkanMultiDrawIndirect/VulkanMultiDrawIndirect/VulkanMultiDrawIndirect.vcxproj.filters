@@ -88,5 +88,8 @@
     <None Include="..\Assets\Shaders\fragment.glsl">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="..\Assets\Shaders\compute.glsl">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>
