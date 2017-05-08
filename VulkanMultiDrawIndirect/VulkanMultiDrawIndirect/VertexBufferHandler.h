@@ -12,7 +12,8 @@ enum class VertexType : uint16_t
 	Normal = ((1U << 2U) << 8U) | 16U,
 	Translation = ((1U << 3U) << 8U) | 64U,
 	IndirectBuffer = ((1U << 4U) << 8U) | 16U,
-	Index = ((1U << 5U) << 8U) | 4U
+	Index = ((1U << 5U) << 8U) | 4U,
+	Bounding = ((1U << 6U) << 8U) | 8U
 };
 
 static std::vector<std::tuple<VertexType, VkFormat>> Texels =
@@ -32,6 +33,9 @@ class VertexBufferHandler
 		VkBufferView view;
 		uint32_t maxCount;
 		uint32_t firstFree;
+
+		// CPU-side store of the buffer. Will be flushed to GPU
+		char* memoryHost = nullptr;
 	};
 
 
@@ -48,8 +52,10 @@ public:
 	void WriteDescriptorSets(VkDescriptorSet descSet, uint32_t bindingOffset);
 	VkBuffer GetBuffer(VertexType type);
 
+	void FlushBuffer(VertexType type);
+	void Update(void * data, uint32_t numElements, VertexType type, uint32_t offset);
 private:
-	const void _CreateBufferSet(VertexType type, uint32_t maxElements);
+	const void _CreateBufferSet(VertexType type, uint32_t maxElements, bool hostVis = false);
 private:
 	std::map<VertexType, BufferSet>_bufferSets;
 

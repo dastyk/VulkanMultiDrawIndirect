@@ -11,8 +11,7 @@ layout(constant_id = 0) const uint INDIRECT_RENDERING = 0;
 #define TEXCOORD 4
 #define NORMAL 5
 #define TRANSLATION 6
-//#define INDIRECTBUFFER 7
-#define INDEX 8
+#define INDEX 7
 
 
 layout(set = 0, binding = POSITION, rgba32f) uniform imageBuffer g_Positions;
@@ -64,7 +63,7 @@ void main()
 	
 	
 	mat4 world = g_Translations[indices.Translation];
-	gl_Position = g_Proj * g_View * world * vec4(imageLoad(g_Positions, int(indices.Position) + gl_VertexIndex).xyz, 1.0f);
+	gl_Position = vec4(imageLoad(g_Positions, int(indices.Position) + gl_VertexIndex).xyz, 1.0f) * world * g_View * g_Proj;
 
 	
 	o_TexC = vec2(imageLoad(g_Texcoords, int(indices.Texcoord) + gl_VertexIndex).xy);

@@ -16,7 +16,7 @@ layout(location = 1) in flat uint i_TextureID;
 
 layout(location = 0) out vec4 o_Albedo;
 
-layout(set = 0, binding = TEXTURE) uniform texture2D tex[2];
+layout(set = 0, binding = TEXTURE) uniform texture2D tex[3];
 layout(set = 0, binding = SAMPLER) uniform sampler samp;
 
 void main()

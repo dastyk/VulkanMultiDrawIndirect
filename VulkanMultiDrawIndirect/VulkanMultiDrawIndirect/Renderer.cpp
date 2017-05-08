@@ -10,11 +10,38 @@
 #include <ConsoleThread.h>
 
 
-
+using namespace DirectX;
 using namespace std;
+static bool go = true;
+static bool cull = true;
+SYNCHRONIZATION_BARRIER  barrier;
 
-Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderSceneTraditional)
+
+const void ThreadEntry(VkCommandBuffer* buffer, const Renderer* renderer, uint8_t index)
 {
+	while (go)
+	{
+		EnterSynchronizationBarrier(&barrier, SYNCHRONIZATION_BARRIER_FLAGS_NO_DELETE);
+		if(cull)
+			renderer->FrustumCull(*buffer, index);
+		else
+			renderer->RecordDrawCalls(*buffer, index);
+		EnterSynchronizationBarrier(&barrier, SYNCHRONIZATION_BARRIER_FLAGS_NO_DELETE);
+	}
+	
+}
+
+
+
+
+
+Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _height(height), _currentRenderStrategy(&Renderer::_RenderTraditionalRecord), _doThreadedRecord(true), _doCulling(true), _testRunning(false)
+{
+
+	InitializeSynchronizationBarrier(&barrier, NUM_SEC_BUFFERS + 1, 100);
+
+	for (uint8_t i = 0; i< NUM_SEC_BUFFERS; i++)
+		 _threads[i] = std::move(std::thread(ThreadEntry, &_secBuffers[i], this, i));
 
 	/************Create Instance*************/
 	const std::vector<const char*> validationLayers = {
@@ -90,13 +117,34 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 	auto cmdPoolInfo = VulkanHelpers::MakeCommandPoolCreateInfo(queueIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
 	VulkanHelpers::CreateCommandPool(_device, &cmdPoolInfo, &_mostlyDynamicCmdPool);
 	
+	for (uint8_t i = 0; i < NUM_SEC_BUFFERS; i++)
+	{
+		VulkanHelpers::CreateCommandPool(_device, &cmdPoolInfo, &_secCmdPools[i]);
+	}
+
+
 	cmdPoolInfo = VulkanHelpers::MakeCommandPoolCreateInfo(queueIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 	VulkanHelpers::CreateCommandPool(_device, &cmdPoolInfo, &_mostlyStaticCmdPool);
 
+	
+	
+
+
 	// Allocate cmd buffer
 	VulkanHelpers::AllocateCommandBuffers(_device, &_cmdBuffer, _mostlyDynamicCmdPool);
+
+	
 	VulkanHelpers::AllocateCommandBuffers(_device, &_blitCmdBuffer, _mostlyDynamicCmdPool);
 	VulkanHelpers::AllocateCommandBuffers(_device, &_traditionalCmdB, _mostlyStaticCmdPool);
+	VulkanHelpers::AllocateCommandBuffers(_device, &_indirectResubmitCmdBuf, _mostlyStaticCmdPool);
+
+
+	for (uint8_t i = 0; i < NUM_SEC_BUFFERS; i++)
+	{
+		VulkanHelpers::AllocateCommandBuffers(_device, &_secBuffers[i], _secCmdPools[i], VK_COMMAND_BUFFER_LEVEL_SECONDARY, 1);
+	}
+	
+
 
 	_CreateSurface(hwnd);
 	_CreateSwapChain();
@@ -149,6 +197,47 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 			return;
 		Renderer* r = static_cast<Renderer*>(userData);
 
+		char* opt;
+		if (DebugUtils::GetArg("-c", &opt, argc, argv))
+		{
+			if (std::string("on") == opt)
+			{
+				r->_doCulling = true;
+			}
+			else if (std::string("off") == opt)
+			{
+				r->_doCulling = false;
+			}
+			else
+			{
+				printf("\n -c [on/off]\t\t Render with frustum culling.\n");
+			}
+			if (argc < 4)
+			{
+				return;
+			}
+		}
+
+		if (DebugUtils::GetArg("-m", &opt, argc, argv))
+		{
+			if (std::string("on") == opt)
+			{
+				r->_doThreadedRecord = true;
+			}
+			else if (std::string("off") == opt)
+			{
+				r->_doThreadedRecord = false;
+			}
+			else
+			{
+				printf("\n -m [on/off]\t\t Record draw commands with multithreading.\n");
+			}
+			if (argc < 4)
+			{
+				return;
+			}
+		}
+
 		if (DebugUtils::GetArg("-i", nullptr, argc, argv))
 		{
 			if (DebugUtils::GetArg("-r", nullptr, argc, argv)) // Indirect Record
@@ -158,6 +247,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 			}
 			else if (DebugUtils::GetArg("-s", nullptr, argc, argv)) // Indirect Resubmit
 			{
+				r->_RecordIndirectCmdBuffer(r->_indirectResubmitCmdBuf, false);
 				r->_currentRenderStrategy = &Renderer::_RenderIndirectResubmit;
 				return;
 			}
@@ -166,28 +256,27 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 		{
 			if (DebugUtils::GetArg("-r", nullptr, argc, argv)) // Traditional
 			{
-				r->_currentRenderStrategy = &Renderer::_RenderSceneTraditional;
+				r->_currentRenderStrategy = &Renderer::_RenderTraditionalRecord;
 				return;
 			}
 			else if (DebugUtils::GetArg("-s", nullptr, argc, argv)) // Traditional resubmit
 			{
+				r->_RecordTraditionalCmdBuffer(r->_traditionalCmdB, false);
 
-				r->_RecordTraditionalCmdBuffer(r->_traditionalCmdB);
-
-				r->_currentRenderStrategy = &Renderer::_RenderSceneTraditionalResubmit;
+				r->_currentRenderStrategy = &Renderer::_RenderTraditionalResubmit;
 				return;
 			}
 		}
 
+		printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
+		printf("*** Render Types ***\n");
+		printf("\t -i\t\t Use multidraw indirect rendering\n");
+		printf("\t -t\t\t Use traditional rendering\n");
 
-			printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
-			printf("*** Render Types ***\n");
-			printf("\t -i\t\t Use multidraw indirect rendering\n");
-			printf("\t -t\t\t Use traditional rendering\n");
-
-			printf("\n\n*** Recording options ***\n");
-			printf("\t -r\t\t Record the command buffer each frame.\n");
-			printf("\t -s\t\t Resubmit a pre-recorded command buffer\n");	
+		printf("\n\n*** Recording options ***\n");
+		printf("\t -r\t\t Record the command buffer each frame.\n");
+		printf("\t -s\t\t Resubmit a pre-recorded command buffer.\n");	
+		printf("\t -c [on/off]\t\t Render with frustum culling.\n");
 	},
 		[](void* userData, int argc, char** argv) {
 		printf("Usage: strategy OPTION\nSets rendering strategy.\n\n");
@@ -197,21 +286,33 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 
 		printf("\n\n*** Recording options ***\n");
 		printf("\t -r\t\t Record the command buffer each frame.\n");
-		printf("\t -s\t\t Resubmit a pre-recorded command buffer\n");
+		printf("\t -s\t\t Resubmit a pre-recorded command buffer.\n");
+		printf("\t -c [on/off]\t\t Render with frustum culling.\n");
 		},
 		"strat",
 		"Sets the rendering strategy."
 	};
 
 	DebugUtils::ConsoleThread::AddCommand(&renderStrategyCmd);
+
+
+
 }
 
 Renderer::~Renderer()
 {
+
+	for (uint8_t i = 0;i < NUM_SEC_BUFFERS; i++)
+		TerminateThread(_threads[i].native_handle(), 0);
+
 	vkDeviceWaitIdle(_device);
 
 
+
+
+
 	vkDestroyDescriptorSetLayout(_device, _descLayout, nullptr);
+
 	vkDestroyDescriptorPool(_device, _descPool, nullptr);
 	delete _vertexBufferHandler;
 	delete _gpuTimer;
@@ -239,6 +340,10 @@ Renderer::~Renderer()
 	vkDestroySampler(_device, _sampler, nullptr);
 	vkFreeMemory(_device, _offscreenImageMemory, nullptr);
 	vkDestroyImage(_device, _offscreenImage, nullptr);
+	for (uint8_t i = 0; i < NUM_SEC_BUFFERS; i++)
+	{
+		vkDestroyCommandPool(_device, _secCmdPools[i], nullptr);
+	}
 	vkDestroyCommandPool(_device, _mostlyDynamicCmdPool, nullptr);
 	vkDestroyCommandPool(_device, _mostlyStaticCmdPool, nullptr);
 	vkDestroySemaphore(_device, _swapchainBlitComplete, nullptr);
@@ -253,29 +358,58 @@ Renderer::~Renderer()
 	VulkanHelpers::DestroyDebugReportCallbackEXT(_instance, _debugCallback, nullptr);
 	vkDestroyInstance(_instance, nullptr);
 }
+int Renderer::StartTest()
+{
+	
+	_frameCount = 0;
+	_frameTimes = 0.0f;
+	_testRunning = true;
+	return 0;
+}
+
+void Renderer::EndTest(float & cputTime, float & gputTime)
+{
+	cputTime = _frameTimes / _frameCount;
+	gputTime = _gpuFrameTimes / _frameCount;
+	_frameCount = 0;
+	_testRunning = false;
+	_frameTimes = 0.0;
+	_gpuFrameTimes = 0.0;
+}
 
 void Renderer::Render(void)
 {
+
+	//_timer.TimeStart("FrameW");
 	vkQueueWaitIdle(_queue);
+//	_timer.TimeEnd("FrameW");
 
-	//printf("GPU Time: %f\n", _gpuTimer->GetTime(0));
+//	printf("%f\n", _timer.GetTime("FrameW"));
 
+	_timer.TimeStart("Frame");
 	// Begin rendering stuff while we potentially wait for swapchain image
+
+	// Flush the translations on the host to the gpu
+	_vertexBufferHandler->FlushBuffer(VertexType::Translation);
 
 	(*this.*_currentRenderStrategy)();
 
 
-	//printf("Finished in: %f", _gpuTimer->GetTime(0));
-
-
-
-
-
+	_timer.TimeEnd("Frame");
 
 	// While the scene is rendering we can get the swapchain image and begin
 	// transitioning it. When it's time to blit we must synchronize to make
 	// sure that the image is finished for us to read. 
 	_BlitSwapchain();
+	vkQueueWaitIdle(_queue);
+	
+	if (_testRunning)
+	{
+		_gpuFrameTimes += _gpuTimer->GetTime(0);
+		_frameTimes += _timer.GetTime("Frame");
+		_frameCount++;
+	}
+
 }
 
 Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
@@ -332,6 +466,10 @@ Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
 	uint32_t texcoordOffset = _vertexBufferHandler->CreateBuffer(texBuffer, bufferCount, VertexType::TexCoord);
 	uint32_t normalOffset = _vertexBufferHandler->CreateBuffer(normBuffer, bufferCount, VertexType::Normal);
 
+
+	BoundingBox b;
+	BoundingBox::CreateFromPoints(b, (size_t)bufferCount, (XMFLOAT3*)posBuffer, sizeof(P));
+
 	delete[] dataPointers.buffer;
 	delete[] posBuffer;
 	delete[] texBuffer;
@@ -339,7 +477,7 @@ Renderer::MeshHandle Renderer::CreateMesh(const std::string & file)
 	dataPointers.buffer = nullptr;
 
 	uint32_t meshIndex = _meshes.size();
-	_meshes.push_back({ positionOffset, texcoordOffset, normalOffset, data });
+	_meshes.push_back({ positionOffset, texcoordOffset, normalOffset, data , b});
 
 	return MeshHandle(meshIndex);
 }
@@ -516,7 +654,7 @@ uint32_t Renderer::CreateTexture(const char * path)
 	if (_textures.size() == 1)
 	{
 		std::vector<VkWriteDescriptorSet> wds;
-		for (uint32_t i = 0; i < 2; i++)
+		for (uint32_t i = 0; i < 3; i++)
 		{
 			wds.push_back(VulkanHelpers::MakeWriteDescriptorSet(_descSet, 0, i, 1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, &vkdii, nullptr, nullptr));
 		}
@@ -533,11 +671,16 @@ uint32_t Renderer::CreateTexture(const char * path)
 
 	return _textures.size() - 1;
 }
-
-Renderer::TranslationHandle Renderer::CreateTranslation(const glm::mat4 & translation)
+using namespace DirectX;
+Renderer::TranslationHandle Renderer::CreateTranslation(const XMMATRIX & translation)
 {
-	uint32_t translationHandle = _vertexBufferHandler->CreateBuffer((void*)(&translation), 1, VertexType::Translation);
-
+	XMFLOAT4X4 temp;
+	XMStoreFloat4x4(&temp, translation);
+	XMMATRIX columnMajor = XMMatrixTranspose(translation);
+	uint32_t offset = _vertexBufferHandler->CreateBuffer((void*)(&columnMajor), 1, VertexType::Translation);
+	_translations.push_back(temp);
+	_translationOffsets.push_back({ offset, _translations.size() - 1 });
+	auto translationHandle = _translationOffsets.size() - 1;
 	return translationHandle;
 }
 
@@ -549,7 +692,7 @@ const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationH
 	pushConstants.PositionOffset = get<0>(_meshes[mesh]);
 	pushConstants.TexcoordOffset = get<1>(_meshes[mesh]);
 	pushConstants.NormalOffset = get<2>(_meshes[mesh]);
-	pushConstants.Translation = translation;
+	pushConstants.Translation = get<0>(_translationOffsets[translation]);
 	pushConstants.Texture = texture;
 	_vertexBufferHandler->CreateBuffer(&pushConstants, 8, VertexType::Index);
 
@@ -557,18 +700,87 @@ const void Renderer::Submit(MeshHandle mesh, TextureHandle texture, TranslationH
 	s.vertexCount = get<3>(_meshes[mesh]).NumFace * 3;
 	s.instanceCount = 1;
 	_vertexBufferHandler->CreateBuffer(&s, 1, VertexType::IndirectBuffer);
+
+
+	auto meshesPerThread = _renderMeshes.size() / NUM_SEC_BUFFERS;
+	for (uint8_t i = 0; i < NUM_SEC_BUFFERS; i++)
+	{
+		_recordOffset[i] = meshesPerThread * i;
+		_toRecord[i] = meshesPerThread + (i == NUM_SEC_BUFFERS - 1 ? (meshesPerThread > 0) ? _renderMeshes.size() % meshesPerThread : 0 : 1) ;
+	}
+	
 }
 
-void Renderer::SetViewMatrix(const glm::mat4x4 & view)
+const void Renderer::UpdateTranslation(const DirectX::XMMATRIX & translation, TranslationHandle translationHandle)
 {
-	_ViewProjection.view = view;
+	XMStoreFloat4x4(&_translations[get<1>(_translationOffsets[translationHandle])], translation);
+	_vertexBufferHandler->Update((void*)&XMMatrixTranspose(translation), 1, VertexType::Translation, get<0>(_translationOffsets[translationHandle]));
+}
+
+void Renderer::SetViewMatrix(const XMMATRIX & view)
+{
+	XMStoreFloat4x4(&_ViewProjection.view, XMMatrixTranspose(view));
+	_frustum.Transform(_frustumTransformed,XMMatrixInverse(nullptr, view));
+
+	memcpy(&_ViewProjection.furstumOrigin, &_frustumTransformed.Origin, sizeof(XMFLOAT3));
+	_ViewProjection.furstumOrigin.w = 0.0f;
+	_ViewProjection.frustumOrientation = _frustumTransformed.Orientation;
+	_ViewProjection.BottomSlope = _frustumTransformed.BottomSlope;
+	_ViewProjection.Far = _frustumTransformed.Far;
+	_ViewProjection.LeftSlope = _frustumTransformed.LeftSlope;
+	_ViewProjection.Near = _frustumTransformed.Near;
+	_ViewProjection.RightSlope = _frustumTransformed.RightSlope;
+	_ViewProjection.TopSlope = _frustumTransformed.TopSlope;
+
 	_UpdateViewProjection();
 }
 
-void Renderer::SetProjectionMatrix(const glm::mat4x4 & projection)
+void Renderer::SetProjectionMatrix(const XMMATRIX & projection)
 {
-	_ViewProjection.projection = projection;
+	XMStoreFloat4x4(&_ViewProjection.projection, XMMatrixTranspose(DirectX::XMMatrixScaling(1.0f, -1.0f, 1.0f) * projection));
+
+	BoundingFrustum::CreateFromMatrix(_frustum, projection);
+
 	_UpdateViewProjection();
+}
+
+const void Renderer::FrustumCull(VkCommandBuffer & buffer, uint8_t index)const
+{
+	BoundingOrientedBox bo;
+	auto start = _recordOffset[index];
+	auto count = _toRecord[index];
+	for (auto i = start; i < start + count; i++)
+	{
+		auto& meshHandle = get<0>(_renderMeshes[i]);
+		auto& translationHandle = get<2>(_renderMeshes[i]);
+
+		BoundingOrientedBox::CreateFromBoundingBox(bo, get<4>(_meshes[meshHandle]));
+		auto& world = XMLoadFloat4x4(&_translations[get<1>(_translationOffsets[get<2>(_renderMeshes[i])])]);
+		bo.Transform(bo, world);
+		
+		if (_frustumTransformed.Intersects(bo))
+		{
+			const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
+			vkCmdDraw(buffer, meshData.NumFace * 3, 1, 0, i);
+		}
+
+	
+	}
+
+
+	return void();
+}
+
+const void Renderer::RecordDrawCalls(VkCommandBuffer & buffer, uint8_t index)const {
+	auto start = _recordOffset[index];
+	auto count = _toRecord[index];
+	for (auto i = start; i < start + count; i++)
+	{
+		auto& meshHandle = get<0>(_renderMeshes[i]);
+		const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
+		vkCmdDraw(buffer, meshData.NumFace * 3, 1, 0, i);
+	}
+
 }
 
 void Renderer::_UpdateViewProjection()
@@ -588,151 +800,11 @@ void Renderer::_UpdateViewProjection()
 	vkQueueWaitIdle(_queue);
 }
 
-
-
-void Renderer::_RenderIndirectRecord(void)
-{
-	VkCommandBufferBeginInfo commandBufBeginInfo = {};
-	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	commandBufBeginInfo.pNext = nullptr;
-	commandBufBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	commandBufBeginInfo.pInheritanceInfo = nullptr;
-
-	vkBeginCommandBuffer(_cmdBuffer, &commandBufBeginInfo);
-
-	_gpuTimer->Start(_cmdBuffer, 0);
-
-	// Do the actual rendering
-
-	array<VkClearValue, 2> clearValues = {};
-	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
-	clearValues[1].depthStencil = { 1.0f, 0 };
-
-	VkRenderPassBeginInfo beginInfo = {};
-	beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	beginInfo.pNext = nullptr;
-	beginInfo.renderPass = _renderPass;
-	beginInfo.framebuffer = _framebuffer;
-	beginInfo.renderArea = { 0, 0, _swapchainExtent.width, _swapchainExtent.height };
-	beginInfo.clearValueCount = clearValues.size();
-	beginInfo.pClearValues = clearValues.data();
-	vkCmdBeginRenderPass(_cmdBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-	VkViewport viewport = {};
-	viewport.x = 0.0f;
-	viewport.y = 0.0f;
-	viewport.width = _swapchainExtent.width;
-	viewport.height = _swapchainExtent.height;
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-
-	VkRect2D scissor = {};
-	scissor.offset = { 0, 0 };
-	scissor.extent = _swapchainExtent;
-
-	vkCmdBindPipeline(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _indirectPipeline);
-	vkCmdSetViewport(_cmdBuffer, 0, 1, &viewport);
-	vkCmdSetScissor(_cmdBuffer, 0, 1, &scissor);
-
-	vkCmdBindDescriptorSets(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
-
-	vkCmdDrawIndirect(_cmdBuffer, _vertexBufferHandler->GetBuffer(VertexType::IndirectBuffer), 0, _renderMeshes.size(), sizeof(VkDrawIndirectCommand));
-
-	vkCmdEndRenderPass(_cmdBuffer);
-
-	// TODO: As of now there is no synchronization point between rendering to
-	// the offscreen buffer and using that image as blit source later. At the
-	// place of this comment we could probably issue an event that is waited on
-	// in the blit buffer before blitting to make sure rendering is complete.
-	// Don't forget to reset the event when we have waited on it.
-
-	_gpuTimer->End(_cmdBuffer, 0);
-
-	vkEndCommandBuffer(_cmdBuffer);
-
-	VkSubmitInfo submitInfo = {};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.pNext = nullptr;
-	submitInfo.waitSemaphoreCount = 0;
-	submitInfo.pWaitSemaphores = nullptr;
-	submitInfo.pWaitDstStageMask = nullptr;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &_cmdBuffer;
-	submitInfo.signalSemaphoreCount = 0;
-	submitInfo.pSignalSemaphores = nullptr;
-	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
-}
-
 // Render the scene in a traditional manner, i.e. rerecord the draw calls to
 // work with a dynamic scene.
-void Renderer::_RenderSceneTraditional(void)
+void Renderer::_RenderTraditionalRecord()
 {
-	VkCommandBufferBeginInfo commandBufBeginInfo = {};
-	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	commandBufBeginInfo.pNext = nullptr;
-	commandBufBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	commandBufBeginInfo.pInheritanceInfo = nullptr;
-
-	vkBeginCommandBuffer(_cmdBuffer, &commandBufBeginInfo);
-
-	_gpuTimer->Start(_cmdBuffer, 0);
-
-	// Do the actual rendering
-
-	array<VkClearValue, 2> clearValues = {};
-	clearValues[0] = { 0.2f, 0.4f, 0.6f, 1.0f };
-	clearValues[1].depthStencil = { 1.0f, 0 };
-
-	VkRenderPassBeginInfo beginInfo = {};
-	beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	beginInfo.pNext = nullptr;
-	beginInfo.renderPass = _renderPass;
-	beginInfo.framebuffer = _framebuffer;
-	beginInfo.renderArea = { 0, 0, _swapchainExtent.width, _swapchainExtent.height };
-	beginInfo.clearValueCount = clearValues.size();
-	beginInfo.pClearValues = clearValues.data();
-	vkCmdBeginRenderPass(_cmdBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-	VkViewport viewport = {};
-	viewport.x = 0.0f;
-	viewport.y = 0.0f;
-	viewport.width = _swapchainExtent.width;
-	viewport.height = _swapchainExtent.height;
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-
-	VkRect2D scissor = {};
-	scissor.offset = { 0, 0 };
-	scissor.extent = _swapchainExtent;
-
-	vkCmdBindPipeline(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
-	vkCmdSetViewport(_cmdBuffer, 0, 1, &viewport);
-	vkCmdSetScissor(_cmdBuffer, 0, 1, &scissor);
-
-	vkCmdBindDescriptorSets(_cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
-
-	uint32_t firstInstance = 0; // This is used to generate offsets for the shader similarly to DrawID for indirect call
-	for (auto& mesh : _renderMeshes)
-	{
-		auto& meshHandle = get<0>(mesh);
-		
-		const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
-		vkCmdDraw(_cmdBuffer, meshData.NumFace * 3, 1, 0, firstInstance);
-
-		firstInstance++;
-	}
-
-	vkCmdEndRenderPass(_cmdBuffer);
-
-	// TODO: As of now there is no synchronization point between rendering to
-	// the offscreen buffer and using that image as blit source later. At the
-	// place of this comment we could probably issue an event that is waited on
-	// in the blit buffer before blitting to make sure rendering is complete.
-	// Don't forget to reset the event when we have waited on it.
-
-	_gpuTimer->End(_cmdBuffer, 0);
-
-	vkEndCommandBuffer(_cmdBuffer);
+	_RecordTraditionalCmdBuffer(_cmdBuffer, true);
 
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -747,12 +819,151 @@ void Renderer::_RenderSceneTraditional(void)
 	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
 }
 
-void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf)
+void Renderer::_RenderTraditionalResubmit()
+{
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.pNext = nullptr;
+	submitInfo.waitSemaphoreCount = 0;
+	submitInfo.pWaitSemaphores = nullptr;
+	submitInfo.pWaitDstStageMask = nullptr;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &_traditionalCmdB;
+	submitInfo.signalSemaphoreCount = 0;
+	submitInfo.pSignalSemaphores = nullptr;
+	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+}
+
+void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecord)
+{
+	auto makeRenderPass = [this, cmdBuf, rerecord](VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)
+	{
+		if (rerecord && (_doCulling || _doThreadedRecord))
+		{
+			vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+
+
+			VkCommandBufferInheritanceInfo ini = {};
+			ini.renderPass = _renderPass;
+			ini.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+			ini.framebuffer = _framebuffer;
+
+		
+			for (int i = 0; i < NUM_SEC_BUFFERS; i++)
+			{
+				VkCommandBufferUsageFlags usageFlags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+				VulkanHelpers::BeginCommandBuffer(_secBuffers[i], usageFlags, &ini);
+				vkCmdBindPipeline(_secBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+				vkCmdSetViewport(_secBuffers[i], 0, 1, &viewport);
+				vkCmdSetScissor(_secBuffers[i], 0, 1, &scissor);
+
+				vkCmdBindDescriptorSets(_secBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
+				
+			}
+			EnterSynchronizationBarrier(&barrier, SYNCHRONIZATION_BARRIER_FLAGS_NO_DELETE);
+			// Threads are working
+			EnterSynchronizationBarrier(&barrier, SYNCHRONIZATION_BARRIER_FLAGS_NO_DELETE);
+			for (int i = 0; i < NUM_SEC_BUFFERS; i++)
+			{
+				vkEndCommandBuffer(_secBuffers[i]);
+			}
+
+			vkCmdExecuteCommands(cmdBuf, NUM_SEC_BUFFERS, _secBuffers);
+
+			vkCmdEndRenderPass(cmdBuf);
+		}
+		else
+		{
+			vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+
+			vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+			vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
+			vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
+			vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
+
+			uint32_t firstInstance = 0; // This is used to generate offsets for the shader similarly to DrawID for indirect call
+			for (auto& mesh : _renderMeshes)
+			{
+				auto& meshHandle = get<0>(mesh);
+
+				const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
+				vkCmdDraw(cmdBuf, meshData.NumFace * 3, 1, 0, firstInstance);
+
+				firstInstance++;
+			}
+
+			vkCmdEndRenderPass(cmdBuf);
+		}
+	};
+
+	_RecordCmdBuffer(cmdBuf, rerecord, makeRenderPass);
+}
+
+void Renderer::_RenderIndirectRecord()
+{
+	//_vertexBufferHandler->FlushBuffer(VertexType::Translation);
+	_vertexBufferHandler->FlushBuffer(VertexType::IndirectBuffer);
+
+	_RecordIndirectCmdBuffer(_cmdBuffer, true);
+
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.pNext = nullptr;
+	submitInfo.waitSemaphoreCount = 0;
+	submitInfo.pWaitSemaphores = nullptr;
+	submitInfo.pWaitDstStageMask = nullptr;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &_cmdBuffer;
+	submitInfo.signalSemaphoreCount = 0;
+	submitInfo.pSignalSemaphores = nullptr;
+	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+}
+
+void Renderer::_RenderIndirectResubmit()
+{
+	//_vertexBufferHandler->FlushBuffer(VertexType::Translation);
+	_vertexBufferHandler->FlushBuffer(VertexType::IndirectBuffer);
+
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.pNext = nullptr;
+	submitInfo.waitSemaphoreCount = 0;
+	submitInfo.pWaitSemaphores = nullptr;
+	submitInfo.pWaitDstStageMask = nullptr;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &_indirectResubmitCmdBuf;
+	submitInfo.signalSemaphoreCount = 0;
+	submitInfo.pSignalSemaphores = nullptr;
+	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
+}
+
+void Renderer::_RecordIndirectCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecord)
+{
+	auto makeRenderPass = [this, cmdBuf](VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)
+	{
+		vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _indirectPipeline);
+		vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
+		vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
+
+		vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
+
+		vkCmdDrawIndirect(cmdBuf, _vertexBufferHandler->GetBuffer(VertexType::IndirectBuffer), 0, _renderMeshes.size(), sizeof(VkDrawIndirectCommand));
+
+		vkCmdEndRenderPass(cmdBuf);
+	};
+
+	_RecordCmdBuffer(cmdBuf, rerecord, makeRenderPass);
+}
+
+void Renderer::_RecordCmdBuffer(VkCommandBuffer& cmdBuf, bool rerecord, function<void(VkRenderPassBeginInfo& beginInfo, VkViewport& viewport, VkRect2D& scissor)> makeRenderPass)
 {
 	VkCommandBufferBeginInfo commandBufBeginInfo = {};
 	commandBufBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	commandBufBeginInfo.pNext = nullptr;
-	commandBufBeginInfo.flags = 0;
+	commandBufBeginInfo.flags = rerecord ? VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT : 0;
 	commandBufBeginInfo.pInheritanceInfo = nullptr;
 
 	vkBeginCommandBuffer(cmdBuf, &commandBufBeginInfo);
@@ -773,7 +984,6 @@ void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf)
 	beginInfo.renderArea = { 0, 0, _swapchainExtent.width, _swapchainExtent.height };
 	beginInfo.clearValueCount = clearValues.size();
 	beginInfo.pClearValues = clearValues.data();
-	vkCmdBeginRenderPass(cmdBuf, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 	VkViewport viewport = {};
 	viewport.x = 0.0f;
@@ -787,24 +997,7 @@ void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf)
 	scissor.offset = { 0, 0 };
 	scissor.extent = _swapchainExtent;
 
-	vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
-	vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
-	vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
-
-	vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descSet, 0, nullptr);
-
-	uint32_t firstInstance = 0; // This is used to generate offsets for the shader similarly to DrawID for indirect call
-	for (auto& mesh : _renderMeshes)
-	{
-		auto& meshHandle = get<0>(mesh);
-
-		const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
-		vkCmdDraw(cmdBuf, meshData.NumFace * 3, 1, 0, firstInstance);
-
-		firstInstance++;
-	}
-
-	vkCmdEndRenderPass(cmdBuf);
+	makeRenderPass(beginInfo, viewport, scissor);
 
 	// TODO: As of now there is no synchronization point between rendering to
 	// the offscreen buffer and using that image as blit source later. At the
@@ -815,11 +1008,9 @@ void Renderer::_RecordTraditionalCmdBuffer(VkCommandBuffer cmdBuf)
 	_gpuTimer->End(cmdBuf, 0);
 
 	vkEndCommandBuffer(cmdBuf);
-
-
 }
 
-void Renderer::_RenderSceneTraditionalResubmit()
+void Renderer::_SubmitCmdBuffer(VkCommandBuffer & cmdBuf, VkQueue & queue)
 {
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -828,15 +1019,10 @@ void Renderer::_RenderSceneTraditionalResubmit()
 	submitInfo.pWaitSemaphores = nullptr;
 	submitInfo.pWaitDstStageMask = nullptr;
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &_traditionalCmdB;
+	submitInfo.pCommandBuffers = &cmdBuf;
 	submitInfo.signalSemaphoreCount = 0;
 	submitInfo.pSignalSemaphores = nullptr;
-	vkQueueSubmit(_queue, 1, &submitInfo, VK_NULL_HANDLE);
-}
-
-
-void Renderer::_RenderIndirectResubmit(void)
-{
+	vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
 }
 
 // Blits the content of the offscreen buffer to the swapchain image before
@@ -1008,7 +1194,7 @@ const void Renderer::_CreateSwapChain()
 		bestFormat = supportedFormats[0];
 		for (const auto& i : supportedFormats)
 		{
-			if (i.format == VK_FORMAT_B8G8R8A8_UNORM && i.format == VK_COLORSPACE_SRGB_NONLINEAR_KHR)
+			if (i.format == VK_FORMAT_B8G8R8A8_UNORM && i.colorSpace == VK_COLORSPACE_SRGB_NONLINEAR_KHR)
 			{
 				bestFormat = i;
 				break;
@@ -1490,7 +1676,7 @@ void Renderer::_CreatePipeline(void)
 	rasterizationState.rasterizerDiscardEnable = VK_FALSE;
 	rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
-	rasterizationState.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	rasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterizationState.depthBiasEnable = VK_FALSE;
 	rasterizationState.depthBiasConstantFactor = 0.0f;
 	rasterizationState.depthBiasClamp = 0.0f;
@@ -1591,7 +1777,7 @@ void Renderer::_CreateDescriptorStuff()
 	/* Create the descriptor pool*/
 	std::vector<VkDescriptorPoolSize> _poolSizes;
 	_poolSizes.push_back(
-	{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2 });
+	{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 3 });
 	_poolSizes.push_back(
 	{ VK_DESCRIPTOR_TYPE_SAMPLER, 1 });
 	_poolSizes.push_back(
@@ -1609,7 +1795,7 @@ void Renderer::_CreateDescriptorStuff()
 	bindings.push_back({
 		(uint32_t)bindings.size(),
 		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-		2,
+		3,
 		VK_SHADER_STAGE_FRAGMENT_BIT,
 		nullptr
 	});

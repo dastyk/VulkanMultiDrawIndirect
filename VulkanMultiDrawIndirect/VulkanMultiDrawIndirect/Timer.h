@@ -14,6 +14,7 @@ public:
 
 	const float DeltaTime()const;
 	const float TotalTime()const;
+	const float TotalTimeMS()const;
 	const unsigned int GetFps()const;
 	const float GetMspf()const;
 	const void Reset();
@@ -23,6 +24,7 @@ public:
 
 private:
 	double _secondsPerCount;
+	double _msPerCount;
 	double _deltaTime;
 	__int64 _pausedTime;
 	__int64 _baseTime;
