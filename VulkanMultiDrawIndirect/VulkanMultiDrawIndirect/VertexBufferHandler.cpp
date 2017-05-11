@@ -7,10 +7,10 @@ VertexBufferHandler::VertexBufferHandler(VkPhysicalDevice phydev, VkDevice devic
 	_CreateBufferSet(VertexType::Position, 1000000);
 	_CreateBufferSet(VertexType::TexCoord, 1000000);
 	_CreateBufferSet(VertexType::Normal, 1000000);
-	_CreateBufferSet(VertexType::Translation, 100000, true);
-	_CreateBufferSet(VertexType::IndirectBuffer, 100000, true);
-	_CreateBufferSet(VertexType::Index, 100000);
-	_CreateBufferSet(VertexType::Bounding, 100000);
+	_CreateBufferSet(VertexType::Translation, 200*500*2 + 1000, true);
+	_CreateBufferSet(VertexType::IndirectBuffer, 200 * 500 * 2 + 1000, true);
+	_CreateBufferSet(VertexType::Index, (200 * 500 * 2 + 1000)*20);
+	_CreateBufferSet(VertexType::Bounding, 200 * 500 * 2 + 1000);
 }
 
 
@@ -27,14 +27,14 @@ VertexBufferHandler::~VertexBufferHandler()
 
 
 }
-
+#include <string>
 const uint32_t VertexBufferHandler::CreateBuffer(void* data, uint32_t numElements, VertexType type)
 {
 	auto& bufferSet = _bufferSets[type];
 	auto byteWidth = TypeSize(type);
 	VkDeviceSize totalSize = byteWidth*numElements;
 	if (bufferSet.firstFree + numElements > bufferSet.maxCount)
-		throw std::runtime_error("Bufferset is full.");
+		throw std::runtime_error("Bufferset is full. Set: " + std::to_string((int)type) );
 
 	uint32_t offset = bufferSet.firstFree;
 	bufferSet.firstFree += numElements;

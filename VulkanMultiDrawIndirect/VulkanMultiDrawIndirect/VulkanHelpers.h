@@ -10,7 +10,7 @@
 #define MB *1024*1024
 namespace VulkanHelpers
 {
-
+#ifdef _DEBUG
 	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 		VkDebugReportFlagsEXT flags,
 		VkDebugReportObjectTypeEXT objType,
@@ -29,7 +29,7 @@ namespace VulkanHelpers
 	VkResult CreateDebugReportCallbackEXT(VkInstance instance, const VkDebugReportCallbackCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugReportCallbackEXT* pCallback);
 
 	void DestroyDebugReportCallbackEXT(VkInstance instance, VkDebugReportCallbackEXT callback, const VkAllocationCallbacks* pAllocator);
-
+#endif
 	/*Abstract allocator class*/
 	class DeviceAllocator
 	{

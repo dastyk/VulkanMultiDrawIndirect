@@ -35,9 +35,9 @@ const void Scene::Init()
 	auto wolf = _objects[1];
 	XMStoreFloat4x4(&_objects[1].translation, t);
 	
-	for (int i = 0; i < 20; i++)
+	for (int i = 0; i < 200; i++)
 	{
-		for (int j = 0; j < 50; j++)
+		for (int j = 0; j < 500; j++)
 		{
 			t = XMMatrixTranslation(40.0f * i, 0, 16.0f * j);
 			XMStoreFloat4x4(&deer.translation, t);

@@ -13,7 +13,6 @@
 using namespace DirectX;
 using namespace std;
 static bool go = true;
-static bool cull = true;
 SYNCHRONIZATION_BARRIER  barrier;
 
 
@@ -22,10 +21,7 @@ const void ThreadEntry(VkCommandBuffer* buffer, const Renderer* renderer, uint8_
 	while (go)
 	{
 		EnterSynchronizationBarrier(&barrier, SYNCHRONIZATION_BARRIER_FLAGS_NO_DELETE);
-		if(cull)
-			renderer->FrustumCull(*buffer, index);
-		else
-			renderer->RecordDrawCalls(*buffer, index);
+		renderer->ThreadRecord(*buffer, index);
 		EnterSynchronizationBarrier(&barrier, SYNCHRONIZATION_BARRIER_FLAGS_NO_DELETE);
 	}
 	
@@ -41,24 +37,29 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 
 	InitializeSynchronizationBarrier(&barrier, NUM_SEC_BUFFERS + 1, 100);
 
-	for (uint8_t i = 0; i< NUM_SEC_BUFFERS; i++)
-		 _threads[i] = std::move(std::thread(ThreadEntry, &_secBuffers[i], this, i));
+
 
 	/************Create Instance*************/
 	const std::vector<const char*> validationLayers = {
+#ifdef _DEBUG
 		"VK_LAYER_LUNARG_standard_validation"
+#endif
 	};
 
-	const auto vkAppInfo = &VulkanHelpers::MakeApplicationInfo(
+	const auto vkAppInfo = VulkanHelpers::MakeApplicationInfo(
 		"Vulkan MDI",
 		VK_MAKE_VERSION(1, 0, 0),
 		"Frengine",
 		VK_MAKE_VERSION(2, 0, 0)
 	);
-	std::vector<const char*> extensions = { "VK_KHR_surface", "VK_KHR_win32_surface", VK_EXT_DEBUG_REPORT_EXTENSION_NAME };
+	std::vector<const char*> extensions = { "VK_KHR_surface", "VK_KHR_win32_surface"
+#ifdef _DEBUG
+		, VK_EXT_DEBUG_REPORT_EXTENSION_NAME 
+#endif
+	};
 	const auto vkInstCreateInfo = VulkanHelpers::MakeInstanceCreateInfo(
 		0,
-		vkAppInfo,
+		&vkAppInfo,
 		validationLayers.size(),
 		validationLayers.data(),
 		nullptr,
@@ -66,7 +67,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 		extensions.data()
 	);
 	VulkanHelpers::CreateInstance(&vkInstCreateInfo, &_instance);
-
+#ifdef _DEBUG
 	/*Create debug callback*/
 	VkDebugReportCallbackCreateInfoEXT createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
@@ -76,7 +77,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 	if (VulkanHelpers::CreateDebugReportCallbackEXT(_instance, &createInfo, nullptr, &_debugCallback) != VK_SUCCESS) {
 		throw std::runtime_error("failed to set up debug callback!");
 	}
-
+#endif
 	/***********Enumerate physical devices*************/
 	_devices = VulkanHelpers::EnumeratePhysicalDevices(_instance);
 	if (_devices.size() == 0)
@@ -176,7 +177,8 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 	_CreatePipeline();
 	_CreateComputePipeline();
 
-
+	for (uint8_t i = 0; i< NUM_SEC_BUFFERS; i++)
+		_threads[i] = std::move(std::thread(ThreadEntry, &_secBuffers[i], this, i));
 /*
 
 	struct P
@@ -203,7 +205,7 @@ Renderer::Renderer(HWND hwnd, uint32_t width, uint32_t height) :_width(width), _
 		if (argc < 2)
 			return;
 		Renderer* r = static_cast<Renderer*>(userData);
-
+		
 		char* opt;
 		bool oO = false;
 		if (DebugUtils::GetArg("-c", &opt, argc, argv))
@@ -461,7 +463,9 @@ Renderer::~Renderer()
 	vkDestroySwapchainKHR(_device, _swapchain, nullptr);
 	vkDestroyDevice(_device, nullptr);
 	vkDestroySurfaceKHR(_instance, _surface, nullptr);
+#ifdef _DEBUG
 	VulkanHelpers::DestroyDebugReportCallbackEXT(_instance, _debugCallback, nullptr);
+#endif
 	vkDestroyInstance(_instance, nullptr);
 }
 int Renderer::StartTest()
@@ -858,27 +862,41 @@ void Renderer::SetProjectionMatrix(const XMMATRIX & projection)
 	_UpdateViewProjection();
 }
 
-const void Renderer::FrustumCull(VkCommandBuffer & buffer, uint8_t index)const
+const void Renderer::ThreadRecord(VkCommandBuffer & buffer, uint8_t index)const
 {
 	BoundingOrientedBox bo;
 	auto start = _recordOffset[index];
 	auto count = _toRecord[index];
-	for (auto i = start; i < start + count; i++)
-	{
-		auto& meshHandle = get<0>(_renderMeshes[i]);
-		auto& translationHandle = get<2>(_renderMeshes[i]);
 
-		BoundingOrientedBox::CreateFromBoundingBox(bo, get<4>(_meshes[meshHandle]));
-		auto& world = XMLoadFloat4x4(&_translations[get<1>(_translationOffsets[get<2>(_renderMeshes[i])])]);
-		bo.Transform(bo, world);
-		
-		if (_frustumTransformed.Intersects(bo))
+	if (_doCulling)
+	{
+		for (auto i = start; i < start + count; i++)
 		{
+			auto& meshHandle = get<0>(_renderMeshes[i]);
+			auto& translationHandle = get<2>(_renderMeshes[i]);
+
+			BoundingOrientedBox::CreateFromBoundingBox(bo, get<4>(_meshes[meshHandle]));
+			auto& world = XMLoadFloat4x4(&_translations[get<1>(_translationOffsets[get<2>(_renderMeshes[i])])]);
+			bo.Transform(bo, world);
+
+			if (_frustumTransformed.Intersects(bo))
+			{
+				const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
+				vkCmdDraw(buffer, meshData.NumFace * 3, 1, 0, i);
+			}
+
+
+		}
+	}
+	else
+	{
+		for (auto i = start; i < start + count; i++)
+		{
+			auto& meshHandle = get<0>(_renderMeshes[i]);
 			const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
 			vkCmdDraw(buffer, meshData.NumFace * 3, 1, 0, i);
 		}
 
-	
 	}
 
 
@@ -1015,18 +1033,10 @@ void Renderer::_UpdateFrustumPlanes()
 
 }
 
-
-const void Renderer::RecordDrawCalls(VkCommandBuffer & buffer, uint8_t index)const {
-	auto start = _recordOffset[index];
-	auto count = _toRecord[index];
-	for (auto i = start; i < start + count; i++)
-	{
-		auto& meshHandle = get<0>(_renderMeshes[i]);
-		const ArfData::Data& meshData = get<3>(_meshes[meshHandle]);
-		vkCmdDraw(buffer, meshData.NumFace * 3, 1, 0, i);
-	}
-
-}
+//
+//const void Renderer::RecordDrawCalls(VkCommandBuffer & buffer, uint8_t index)const {
+//	
+//}
 
 void Renderer::_UpdateViewProjection()
 {

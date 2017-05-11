@@ -1,7 +1,7 @@
 #include "VulkanHelpers.h"
 
 
-
+#ifdef _DEBUG
 
 VkResult VulkanHelpers::CreateDebugReportCallbackEXT(VkInstance instance, const VkDebugReportCallbackCreateInfoEXT * pCreateInfo, const VkAllocationCallbacks * pAllocator, VkDebugReportCallbackEXT * pCallback)
 {
@@ -21,7 +21,7 @@ void VulkanHelpers::DestroyDebugReportCallbackEXT(VkInstance instance, VkDebugRe
 		func(instance, callback, pAllocator);
 	}
 }
-
+#endif
 VkApplicationInfo VulkanHelpers::MakeApplicationInfo(const char * pApplicationName, uint32_t applicationVersion, const char * pEngineName, uint32_t engineVersion, uint32_t apiVersion, const void * pNext)
 {
 	VkApplicationInfo vkAppInfo =

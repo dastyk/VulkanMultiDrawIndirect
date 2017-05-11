@@ -74,8 +74,8 @@ public:
 	float GetAspect() { return (float)_width / _height; }
 
 
-	const void FrustumCull(VkCommandBuffer& buffer, uint8_t index) const;
-	const void RecordDrawCalls(VkCommandBuffer& buffer, uint8_t index) const;
+	const void ThreadRecord(VkCommandBuffer& buffer, uint8_t index) const;
+	//const void RecordDrawCalls(VkCommandBuffer& buffer, uint8_t index) const;
 private:
 
 	typedef void(Renderer::*RenderStrategyFP)();
@@ -182,7 +182,9 @@ private:
 	uint32_t _toRecord[NUM_SEC_BUFFERS];
 
 	VkQueue _queue;
+#ifdef _DEBUG
 	VkDebugReportCallbackEXT _debugCallback;
+#endif
 	VkSurfaceKHR _surface;
 	VkFormat _swapchainFormat;
 	VkExtent2D _swapchainExtent;
