@@ -23,27 +23,39 @@ const void Scene::Init()
 	_renderer.SetProjectionMatrix(_camera.GetProj());
 	_camera.TranslateActiveCamera(100.0f, 0.0f, -80.0f);
 
-	XMMATRIX t = XMMatrixTranslation(-20, 0, 0);
-	_CreateObject("../Assets/Meshes/deer-obj.obj", "../Assets/Textures/deer texture.tga", t);
+	//XMMATRIX t = XMMatrixTranslation(-20, 0, 0);
+//	_CreateObject("../Assets/Meshes/deer-obj.obj", "../Assets/Textures/deer texture.tga", t);
 
-	auto deer = _objects[0];
-	XMStoreFloat4x4(&_objects[0].translation, t);
+	//auto deer = _objects[0];
+	//XMStoreFloat4x4(&_objects[0].translation, t);
 
-	t = XMMatrixTranslation(-40, 0, 0);
-	_CreateObject("../Assets/Meshes/wolf-obj.obj", "../Assets/Textures/wolf texture.tga", t);
+	//t = XMMatrixTranslation(-40, 0, 0);
+	//_CreateObject("../Assets/Meshes/wolf-obj.obj", "../Assets/Textures/wolf texture.tga", t);
 
-	auto wolf = _objects[1];
-	XMStoreFloat4x4(&_objects[1].translation, t);
+//	auto wolf = _objects[1];
+//	XMStoreFloat4x4(&_objects[1].translation, t);
+	Object deer;
+	deer.mesh = _renderer.CreateMesh("../Assets/Meshes/deer-obj.obj");
+	deer.texture = _renderer.CreateTexture("../Assets/Textures/deer texture.tga");
+
+	Object wolf;
+	wolf.mesh = _renderer.CreateMesh("../Assets/Meshes/wolf-obj.obj");
+	wolf.texture = _renderer.CreateTexture("../Assets/Textures/wolf texture.tga");
+
 	
-	for (int i = 0; i < 200; i++)
+	auto t = XMMatrixIdentity();
+
+	for (int i = 0; i < 20; i++)
 	{
-		for (int j = 0; j < 500; j++)
+		for (int j = 0; j < 200; j++)
 		{
+			
 			t = XMMatrixTranslation(40.0f * i, 0, 16.0f * j);
 			XMStoreFloat4x4(&deer.translation, t);
 			deer.translationHandle = _renderer.CreateTranslation(t);
 			_objects.push_back(deer);
 
+			
 			t = XMMatrixScaling(2.0f, 2.0f, 2.0f) * XMMatrixTranslation(40.0f * i + 20.0f, 0, 16.0f * j);
 			XMStoreFloat4x4(&wolf.translation, t);
 			wolf.translationHandle = _renderer.CreateTranslation(t);
